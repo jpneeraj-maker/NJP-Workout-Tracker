@@ -48,6 +48,7 @@ function SortableExerciseCard({ id, children }) {
     </div>
   );
 }
+function App() {
 
 const defaultProgram = {
   weeks: {
@@ -756,3 +757,5 @@ if (activeScreen === "landing") {
     </div>
   </div>
 );}
+
+export default App;
