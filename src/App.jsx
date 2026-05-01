@@ -67,7 +67,13 @@ const defaultProgram = {
 const [data, setData] = useState(() => {
   const stored = localStorage.getItem("workout-app-data");
 
-  if (stored) return JSON.parse(stored);
+ if (stored) {
+  const parsed = JSON.parse(stored);
+
+  if (parsed?.weeks && Object.keys(parsed.weeks).length > 0) {
+    return parsed;
+  }
+}
 
   return defaultProgram;
 });
