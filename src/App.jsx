@@ -74,7 +74,7 @@ const [data, setData] = useState(() => {
 
 const [selectedWeek, setSelectedWeek] = useState(() => {
   const saved = localStorage.getItem("selected-week");
-  return saved ? saved : "7";
+  return saved ? saved : "0";
 });
   const [selectedDay, setSelectedDay] = useState(() => {
   const saved = localStorage.getItem("selected-day");
