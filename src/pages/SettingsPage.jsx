@@ -69,8 +69,12 @@ useEffect(() => {
 console.log("DATA:", data);
 console.log("DRAFT:", draftProgram);
 
+const weeksArray = Object.values(draftProgram?.weeks || {});
+
 const selectedWeekData =
-  Object.values(draftProgram?.weeks || {})[activeWeekIndex];
+  weeksArray.length > 0 && weeksArray[activeWeekIndex]
+    ? weeksArray[activeWeekIndex]
+    : null;
 
 const [expandedDayIndex, setExpandedDayIndex] = useState(null);
 const exerciseLibrary = [
@@ -195,8 +199,12 @@ onClick={() => {
 </button>
   </div>
 )}
-
-{selectedWeekData?.days?.length > 0 && (
+{!selectedWeekData && (
+  <div className="text-white/50 text-sm mt-4">
+    No data available. Try importing backup.
+  </div>
+)}
+{selectedWeekData && selectedWeekData.days && (
   <div className="mb-4 space-y-3">
     {selectedWeekData.days.map((day, dayIndex) => (
       <div

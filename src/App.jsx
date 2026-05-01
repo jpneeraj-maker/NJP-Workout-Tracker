@@ -252,15 +252,24 @@ const interval = setInterval(() => {
   restPaused
 ]);
 
-const currentWeek = data.weeks[selectedWeek]; 
-const currentDay = currentWeek.days[selectedDay];
+
+const currentWeek = data?.weeks?.[selectedWeek] || null;
+
+if (!currentWeek || !currentWeek.days) {
+  return <div className="text-white">No workout data</div>;
+}
+
+const currentDay =
+  currentWeek?.days?.[selectedDay] || null;
+
 const nextWorkoutIndex =
-  selectedDay >= currentWeek.days.length
+  selectedDay >= (currentWeek?.days?.length || 0)
     ? 0
     : selectedDay;
 
 const displayedNextWorkout =
-  currentWeek.days[nextWorkoutIndex];
+  (currentWeek?.days?.[nextWorkoutIndex]) || null;
+
 const activeWeekKey = selectedWeek;
 const activeDayIndex = selectedDay;
 
