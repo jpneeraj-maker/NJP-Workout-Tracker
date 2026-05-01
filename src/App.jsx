@@ -255,9 +255,7 @@ const interval = setInterval(() => {
 
 const currentWeek = data?.weeks?.[selectedWeek] || null;
 
-if (!currentWeek || !currentWeek.days) {
-  return <div className="text-white">No workout data</div>;
-}
+const hasData = currentWeek && currentWeek.days;
 
 const currentDay =
   currentWeek?.days?.[selectedDay] || null;
@@ -274,7 +272,7 @@ const activeWeekKey = selectedWeek;
 const activeDayIndex = selectedDay;
 
 const activeExercise =
-  currentDay.exercises[activeExerciseIndex];
+  currentDay?.exercises?.[activeExerciseIndex] || null;
 
 const activeSet =
   activeExercise?.sets[activeSetIndex];
@@ -283,8 +281,8 @@ const isLastSetOfExercise =
   activeSetIndex === activeExercise.sets.length - 1;
 
 const isLastExercise =
-  currentDay.exercises &&
-  activeExerciseIndex === currentDay.exercises.length - 1;
+  (currentDay?.exercises?.length || 0) > 0 &&
+  activeExerciseIndex === (currentDay?.exercises?.length || 0) - 1;
 
 const isFinalSetOfWorkout =
   isLastSetOfExercise && isLastExercise;
@@ -485,7 +483,7 @@ const workoutRecord = {
   }),
     week: selectedWeek,
     day: currentDay.name,
-exercises: currentDay.exercises
+exercises: (currentDay?.exercises || [])
   .map((exercise) => ({
     name: exercise.name,
     remarks: exercise.remarks || "",
@@ -520,7 +518,7 @@ item.day === workoutRecord.day
 });
 
 const nextDay =
-  selectedDay >= currentWeek.days.length - 1
+  selectedDay >= (currentWeek?.days?.length || 0) - 1
     ? 0
     : selectedDay + 1;
 setCompletedWorkoutName(currentDay.name);
@@ -529,7 +527,7 @@ setSelectedDay(nextDay);
 setData((prev) => {
   const updated = JSON.parse(JSON.stringify(prev));
 
-  updated.weeks[selectedWeek].days[nextDay].exercises.forEach((exercise) => {
+  updated.weeks[selectedWeek]?.days?.[nextDay]?.exercises || [].forEach((exercise) => {
     exercise.remarks = "";
 
     exercise.sets.forEach((set) => {
@@ -555,6 +553,34 @@ function formatTime(totalSeconds) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 function advanceWorkout() {
+if (activeSet) {
+  const updated = { ...data };
+  const weeks = { ...updated.weeks };
+
+  const week = weeks[selectedWeek];
+  const day = week?.days?.[selectedDay];
+  const exercise = day?.exercises?.[activeExerciseIndex];
+  const set = exercise?.sets?.[activeSetIndex];
+
+  if (set) {
+    if (
+      set.actualReps === undefined ||
+      set.actualReps === ""
+    ) {
+      set.actualReps = set.targetReps;
+    }
+
+    if (
+      set.actualWeight === undefined ||
+      set.actualWeight === ""
+    ) {
+      set.actualWeight = set.plannedWeight;
+    }
+  }
+
+  updated.weeks = weeks;
+  setData(updated);
+}
   const isFinalSet = isFinalSetOfWorkout;
   const isLastSet = isLastSetOfExercise;
 
@@ -621,7 +647,11 @@ if (activeScreen === "landing") {
   }}
 >
   <div className="min-h-screen bg-black/55 backdrop-blur-sm p-4 max-w-md mx-auto">
-{activeTab === "history" ? (
+{!hasData ? (
+  <div className="text-white p-4">
+    No workout data. Go to Settings to create a routine.
+  </div>
+) : activeTab === "history" ? (
   <HistoryPage
     workoutHistory={workoutHistory}
     expandedHistoryIndex={expandedHistoryIndex}
