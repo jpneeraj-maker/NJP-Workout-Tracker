@@ -49,11 +49,27 @@ function SortableExerciseCard({ id, children }) {
   );
 }
 
-export default function App() {
-  const [data, setData] = useState(() => {
-    const saved = localStorage.getItem("workout-app-data");
-    return saved ? JSON.parse(saved) : workoutData;
-  });
+const defaultProgram = {
+  weeks: {
+    0: {
+      days: [
+        { name: "Push A", exercises: [] },
+        { name: "Pull A", exercises: [] },
+        { name: "Legs", exercises: [] },
+        { name: "Push B", exercises: [] },
+        { name: "Pull B", exercises: [] }
+      ]
+    }
+  }
+};
+
+const [data, setData] = useState(() => {
+  const stored = localStorage.getItem("workout-app-data");
+
+  if (stored) return JSON.parse(stored);
+
+  return defaultProgram;
+});
 
 const [selectedWeek, setSelectedWeek] = useState(() => {
   const saved = localStorage.getItem("selected-week");
