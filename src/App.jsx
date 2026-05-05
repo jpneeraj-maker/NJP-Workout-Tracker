@@ -51,7 +51,7 @@ function SortableExerciseCard({ id, children }) {
 function App() {
 
 const defaultProgram = {
-  weeks: {
+  routines: {
     0: {
       days: [
         { name: "Push A", exercises: [] },
@@ -70,7 +70,7 @@ const [data, setData] = useState(() => {
  if (stored) {
   const parsed = JSON.parse(stored);
 
-  if (parsed?.weeks && Object.keys(parsed.weeks).length > 0) {
+  if (parsed?.routines && Object.keys(parsed.routines).length > 0) {
     return parsed;
   }
 }
@@ -78,8 +78,8 @@ const [data, setData] = useState(() => {
   return defaultProgram;
 });
 
-const [selectedWeek, setSelectedWeek] = useState(() => {
-  const saved = localStorage.getItem("selected-week");
+const [selectedRoutine, setselectedRoutine] = useState(() => {
+  const saved = localStorage.getItem("selected-routine");
   return saved ? saved : "0";
 });
   const [selectedDay, setSelectedDay] = useState(() => {
@@ -94,6 +94,18 @@ const [workoutMode, setWorkoutMode] = useState(
 );
 
 const [settingsSource, setSettingsSource] = useState(null);
+
+const [transitionDirection, setTransitionDirection] = useState("forward");
+const [isTransitioning, setIsTransitioning] = useState(false);
+function navigateWithTransition(callback, direction = "forward") {
+  setTransitionDirection(direction);
+  setIsTransitioning(true);
+
+  setTimeout(() => {
+    callback();
+    setIsTransitioning(false);
+  }, 250);
+}
 
 const [activeWorkoutScreen, setActiveWorkoutScreen] = useState(
   savedWorkoutState.activeWorkoutScreen ?? null
@@ -200,8 +212,8 @@ useEffect(() => {
     localStorage.setItem("workout-app-data", JSON.stringify(data));
   }, [data]);
 useEffect(() => {
-  localStorage.setItem("selected-week", selectedWeek);
-}, [selectedWeek]);
+  localStorage.setItem("selected-routine", selectedRoutine);
+}, [selectedRoutine]);
 useEffect(() => {
   localStorage.setItem("selected-day", selectedDay);
 }, [selectedDay]);
@@ -276,7 +288,7 @@ const interval = setInterval(() => {
 ]);
 
 
-const currentWeek = data?.weeks?.[selectedWeek] || null;
+const currentWeek = data?.routines?.[selectedRoutine] || null;
 
 const hasData = currentWeek && currentWeek.days;
 
@@ -291,7 +303,7 @@ const nextWorkoutIndex =
 const displayedNextWorkout =
   (currentWeek?.days?.[nextWorkoutIndex]) || null;
 
-const activeWeekKey = selectedWeek;
+const activeWeekKey = selectedRoutine;
 const activeDayIndex = selectedDay;
 
 const activeExercise =
@@ -317,7 +329,7 @@ const hasWeightField =
 
   function updateSet(exerciseIndex, setIndex, field, value) {
     const updated = { ...data };
-    updated.weeks[activeWeekKey].days[activeDayIndex].exercises[exerciseIndex].sets[
+    updated.routines[activeWeekKey].days[activeDayIndex].exercises[exerciseIndex].sets[
       setIndex
     ][field] = value;
 
@@ -328,10 +340,10 @@ function handleAddWeek() {
   setData((prev) => {
     const updated = JSON.parse(JSON.stringify(prev));
 
-    const weekKeys = Object.keys(updated.weeks);
+    const weekKeys = Object.keys(updated.routines);
     const lastWeekKey = weekKeys[weekKeys.length - 1];
 
-    const lastWeek = updated.weeks[lastWeekKey];
+    const lastWeek = updated.routines[lastWeekKey];
     const nextWeekNumber = Number(lastWeekKey) + 1;
 
     const newWeek = JSON.parse(JSON.stringify(lastWeek));
@@ -347,19 +359,19 @@ function handleAddWeek() {
       });
     });
 
-    updated.weeks[nextWeekNumber] = newWeek;
+    updated.routines[nextWeekNumber] = newWeek;
 
     return updated;
   });
 
-  setSelectedWeek(String(Number(selectedWeek) + 1));
+  setselectedRoutine(String(Number(selectedRoutine) + 1));
   setSelectedDay(0);
 }
 function updateExerciseRemark(weekKey, dayIndex, exerciseIndex, value) {
   setData((prev) => {
     const updated = JSON.parse(JSON.stringify(prev));
 
-    updated.weeks[weekKey].days[dayIndex].exercises[exerciseIndex].remarks = value;
+    updated.routines[weekKey].days[dayIndex].exercises[exerciseIndex].remarks = value;
 
     return updated;
   });
@@ -368,7 +380,7 @@ function handleAddExercise() {
   setData((prev) => {
     const updated = JSON.parse(JSON.stringify(prev));
 
-    updated.weeks[activeWeekKey].days[activeDayIndex].exercises.push({
+    updated.routines[activeWeekKey].days[activeDayIndex].exercises.push({
       name: "New Exercise",
       remarks: "",
 sets: [
@@ -410,7 +422,7 @@ function handleRemoveExercise(exerciseIndex) {
   setData((prev) => {
     const updated = JSON.parse(JSON.stringify(prev));
 
-    updated.weeks[activeWeekKey].days[activeDayIndex].exercises.splice(
+    updated.routines[activeWeekKey].days[activeDayIndex].exercises.splice(
       exerciseIndex,
       1
     );
@@ -422,7 +434,7 @@ function handleRemoveSet(exerciseIndex, setIndex) {
   setData((prev) => {
     const updated = JSON.parse(JSON.stringify(prev));
 
-    updated.weeks[activeWeekKey].days[activeDayIndex].exercises[
+    updated.routines[activeWeekKey].days[activeDayIndex].exercises[
       exerciseIndex
     ].sets.splice(setIndex, 1);
 
@@ -434,7 +446,7 @@ function handleAddSet(exerciseIndex) {
     const updated = JSON.parse(JSON.stringify(prev));
 
     const sets =
-      updated.weeks[activeWeekKey].days[activeDayIndex].exercises[exerciseIndex]
+      updated.routines[activeWeekKey].days[activeDayIndex].exercises[exerciseIndex]
         .sets;
 
     const workingSets = sets.filter((set) =>
@@ -457,7 +469,7 @@ function moveSet(exerciseIndex, setIndex, direction) {
     const updated = JSON.parse(JSON.stringify(prev));
 
     const sets =
-      updated.weeks[activeWeekKey].days[activeDayIndex].exercises[exerciseIndex]
+      updated.routines[activeWeekKey].days[activeDayIndex].exercises[exerciseIndex]
         .sets;
 
     const newIndex = setIndex + direction;
@@ -504,7 +516,7 @@ const workoutRecord = {
     month: "long",
     year: "numeric",
   }),
-    week: selectedWeek,
+    week: selectedRoutine,
     day: currentDay.name,
 exercises: (currentDay?.exercises || [])
   .map((exercise) => ({
@@ -550,7 +562,7 @@ setSelectedDay(nextDay);
 setData((prev) => {
   const updated = JSON.parse(JSON.stringify(prev));
 
-  updated.weeks[selectedWeek]?.days?.[nextDay]?.exercises || [].forEach((exercise) => {
+  updated.routines[selectedRoutine]?.days?.[nextDay]?.exercises || [].forEach((exercise) => {
     exercise.remarks = "";
 
     exercise.sets.forEach((set) => {
@@ -578,9 +590,9 @@ function formatTime(totalSeconds) {
 function advanceWorkout() {
 if (activeSet) {
   const updated = { ...data };
-  const weeks = { ...updated.weeks };
+  const routines = { ...updated.routines };
 
-  const week = weeks[selectedWeek];
+  const week = routines[selectedRoutine];
   const day = week?.days?.[selectedDay];
   const exercise = day?.exercises?.[activeExerciseIndex];
   const set = exercise?.sets?.[activeSetIndex];
@@ -601,7 +613,7 @@ if (activeSet) {
     }
   }
 
-  updated.weeks = weeks;
+  updated.routines = routines;
   setData(updated);
 }
   const isFinalSet = isFinalSetOfWorkout;
@@ -666,10 +678,23 @@ if (activeScreen === "landing") {
     backgroundSize: "cover",
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",
-    backgroundAttachment: "fixed",
+    backgroundAttachment: "scroll",
   }}
 >
-  <div className="min-h-screen bg-black/55 backdrop-blur-sm p-4 max-w-md mx-auto">
+<div
+  className={`
+    min-h-screen
+    transition-all duration-250 ease-out
+    ${isTransitioning
+      ? transitionDirection === "forward"
+        ? "opacity-0 translate-x-[-80px]"
+        : "opacity-0 translate-x-[80px]"
+      : "opacity-100 translate-x-0"
+    }
+  `}
+>
+  <div className="max-w-md mx-auto px-4">
+
 {!hasData ? (
   <div className="text-white p-4">
     No workout data. Go to Settings to create a routine.
@@ -681,26 +706,37 @@ if (activeScreen === "landing") {
     setExpandedHistoryIndex={setExpandedHistoryIndex}
     setWorkoutHistory={setWorkoutHistory}
     setActiveScreen={setActiveScreen}
+    navigateWithTransition={navigateWithTransition}
+    workoutHistory={workoutHistory}
+    setWorkoutHistory={setWorkoutHistory}
+    setActiveScreen={setActiveScreen}
+    routines={data.routines}
   />
 ) : activeTab === "settings" ? (
   <SettingsPage
     data={data}
     workoutHistory={workoutHistory}
-    selectedWeek={selectedWeek}
+    selectedRoutine={selectedRoutine}
     selectedDay={selectedDay}
     setActiveScreen={setActiveScreen}
     setActiveTab={setActiveTab}
     settingsSource={settingsSource}
     setSettingsSource={setSettingsSource}
+    navigateWithTransition={navigateWithTransition}
   />
 ) : activeTab === "workout" && !workoutMode ? (
-<WorkoutPreviewPage {...{
-  displayedNextWorkout,
-  setActiveTab,
-  setSettingsSource,
-  setActiveScreen,
-  startWorkout
-}} />
+<WorkoutPreviewPage
+  data={data}
+  selectedRoutine={selectedRoutine}
+  setselectedRoutine={setselectedRoutine}
+  selectedDay={selectedDay}
+  setSelectedDay={setSelectedDay}
+  startWorkout={startWorkout}
+  setActiveTab={setActiveTab}
+  setSettingsSource={setSettingsSource}
+  setActiveScreen={setActiveScreen}
+  navigateWithTransition={navigateWithTransition}
+/>
 ) : (
   <WorkoutPage {...{
     startWorkout,
@@ -762,6 +798,7 @@ if (activeScreen === "landing") {
 )}
     </div>
   </div>
+</div>
 );}
 
 export default App;

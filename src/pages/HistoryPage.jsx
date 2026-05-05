@@ -1,10 +1,27 @@
 import React from "react";
+import { Trash2 } from "lucide-react";
 export default function HistoryPage(props) {
-  const { workoutHistory, setWorkoutHistory, setActiveScreen } = props;
+  const {
+  workoutHistory,
+  setWorkoutHistory,
+  setActiveScreen,
+  routines
+} = props;
+console.log("ROUTINES DATA:", routines);
+const [selectedRoutine, setSelectedRoutine] = React.useState(null);
+const [selectedDay, setSelectedDay] = React.useState(null);
+const [tempWorkout, setTempWorkout] = React.useState(null);
+const [expandedExerciseIndex, setExpandedExerciseIndex] = React.useState(null);
+const getTodayKey = () => {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+};
 
 const [selectedDate, setSelectedDate] = React.useState(null);
-const [currentMonth, setCurrentMonth] = React.useState(3); // April (0-based index)
-const [currentYear, setCurrentYear] = React.useState(2026);
+const today = new Date();
+
+const [currentMonth, setCurrentMonth] = React.useState(today.getMonth());
+const [currentYear, setCurrentYear] = React.useState(today.getFullYear());
 
 const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
 const firstDay = new Date(currentYear, currentMonth, 1).getDay();
@@ -17,90 +34,17 @@ workoutHistory.forEach((w) => {
 });
 
 React.useEffect(() => {
-  if (workoutHistory.length > 0) {
-    setSelectedDate(workoutHistory[0].saveKey);
-  }
-}, [workoutHistory]);
+  const today = new Date();
+
+  setSelectedDate(getTodayKey());
+}, []);
 
 React.useEffect(() => {
-  const workoutsInMonth = workoutHistory.filter((w) => {
-    const date = new Date(w.saveKey);
-    return (
-      date.getMonth() === currentMonth &&
-      date.getFullYear() === currentYear
-    );
-  });
+  // Only run when history changes (new data added)
+  const todayKey = getTodayKey();
+  setSelectedDate(todayKey);
+}, [workoutHistory]);
 
-  if (workoutsInMonth.length > 0) {
-    // latest workout = first in array (assuming sorted)
-    setSelectedDate(workoutsInMonth[0].saveKey);
-  } else {
-    setSelectedDate(null);
-  }
-}, [currentMonth, currentYear, workoutHistory]);
-const workoutOptions = [
-  { label: "Day 1 — Push" },
-  { label: "Day 2 — Pull" },
-  { label: "Day 3 — Legs" },
-  { label: "Day 4 — Push" },
-  { label: "Day 5 — Pull" },
-];
-const WORKOUT_SPLIT = {
-  Day1: {
-    label: "Push",
-    exercises: [
-      "Dumbbell Bench Press",
-      "Dumbbell Incline Bench Press",
-      "Dumbbell Seated Overhead Press",
-      "EZ Bar Skull Crushers",
-      "Dumbbell Lateral Raises"
-    ]
-  },
-
-  Day2: {
-    label: "Pull",
-    exercises: [
-      "Lat Pulldown",
-      "Seated Row",
-      "Face Pull",
-      "Dumbbell Curl",
-      "Hammer Curl"
-    ]
-  },
-
-  Day3: {
-    label: "Legs",
-    exercises: [
-      "Squat",
-      "Romanian Deadlift",
-      "Leg Press",
-      "Leg Curl",
-      "Calf Raises"
-    ]
-  },
-
-  Day4: {
-    label: "Push",
-    exercises: [
-      "Dumbbell Bench Press",
-      "Dumbbell Incline Bench Press",
-      "Dumbbell Seated Overhead Press",
-      "EZ Bar Skull Crushers",
-      "Dumbbell Lateral Raises"
-    ]
-  },
-
-  Day5: {
-    label: "Pull",
-    exercises: [
-      "Lat Pulldown",
-      "Seated Row",
-      "Face Pull",
-      "Dumbbell Curl",
-      "Hammer Curl"
-    ]
-  }
-};
 const selectedWorkout = selectedDate
   ? historyByDate[selectedDate]
   : null;
@@ -108,7 +52,7 @@ const selectedWorkout = selectedDate
   return (
     <>
       {/* Back Button */}
-      <div className="mb-4">
+      <div className="mb-4 transition-all duration-200 active:scale-[0.98]">
         <button
           onClick={() => {
             window.history.pushState({}, "");
@@ -128,7 +72,7 @@ const selectedWorkout = selectedDate
       </div>
 
       {/* Month Selector */}
-      <div className="flex items-center justify-center mb-4 text-white/80">
+      <div className="flex items-center justify-center mb-4 text-white/80 transition-all duration-200 active:scale-[0.98]">
         <button
           className="px-3"
           onClick={() => {
@@ -184,16 +128,10 @@ const selectedWorkout = selectedDate
   const workout = historyByDate[dateKey];
 
 
-let dotColor = null;
+const dotColor = workout ? "bg-purple-500" : null;
 
-if (workout?.workoutType === "Push") {
-  dotColor = "bg-purple-500";
-} else if (workout?.workoutType === "Pull") {
-  dotColor = "bg-green-500";
-} else if (workout?.workoutType === "Legs") {
-  dotColor = "bg-yellow-400";
-}
   const isSelected = selectedDate === dateKey;
+
 
   return (
     <div
@@ -206,191 +144,122 @@ if (workout?.workoutType === "Push") {
       <div>{date}</div>
 
       {dotColor && (
-        <div className={`w-1.5 h-1.5 rounded-full mt-1 ${dotColor}`} />
+        <div className={`w-2 h-2 rounded-full mt-1 ${dotColor}`} />
       )}
     </div>
   );
 })}
       </div>
 
-      {/* Legend */}
-      <div className="flex justify-center gap-4 mb-6 text-xs text-white/60">
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-          Push
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 rounded-full bg-green-500"></div>
-          Pull
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
-          Legs
-        </div>
-      </div>
-
       {/* Selected Workout Panel */}
       <div className="bg-black/20 border border-white/10 rounded-2xl p-4">
         {selectedWorkout ? (
           <>
-            <div className="text-sm text-white/60 mb-1">
-              {selectedWorkout.date}
-            </div>
+<div className="grid grid-cols-2 gap-y-2 mb-4 text-sm">
 
-            <div className="text-lg font-semibold text-white mb-1">
-  {selectedWorkout.workoutType}
+  {/* Row 1 */}
+  <div className="text-white/70">
+    {new Date(selectedWorkout.date).toLocaleDateString("en-GB")}
+  </div>
+
+  <div className="text-right text-white font-medium">
+    {selectedWorkout.routineName
+  ? `${selectedWorkout.routineName} | ${selectedWorkout.workoutType}`
+  : selectedWorkout.workoutType}
+  </div>
+
+  {/* Row 2 */}
+  <div className="text-white/60 text-xs">
+    Duration: {selectedWorkout.duration || "-"}
+  </div>
+
+  <div className="text-right text-white/60 text-xs">
+    Exercises: {selectedWorkout.exercises?.length || 0}
+  </div>
+
 </div>
-
-<div className="text-xs text-white/50 mb-3">
-  {selectedWorkout.exercises?.length || 0} exercises
-</div>
-
-            {/* Stats */}
-            <div className="flex justify-between text-xs text-white/60 mb-4">
-              <div>
-                Duration: {selectedWorkout.duration || "-"}
-              </div>
-              <div>
-                Exercises: {selectedWorkout.exercises?.length || 0}
-              </div>
-            </div>
-
             {/* Exercises */}
-            <div className="space-y-4 text-sm text-white/80">
-              {selectedWorkout.exercises.map((exercise, i) => {
+            <div className="space-y-3 text-sm text-white/80">
+             {selectedWorkout.exercises.map((exercise, i) => {
+  const isExpanded = expandedExerciseIndex === i;
+
   return (
-    <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-3">
-      <div className="flex justify-between items-center mb-2">
+    <div
+  key={i}
+ className={`rounded-2xl p-4 transition-all duration-200
+  ${
+    isExpanded
+      ? "border border-purple-400 bg-purple-400/10 shadow-lg shadow-purple-500/20"
+      : "border border-white/10 bg-white/5"
+  }
+`}
+>
+      {/* Exercise Header */}
+ <div
+  onClick={() =>
+    setExpandedExerciseIndex(isExpanded ? null : i)
+  }
+  className="flex justify-between items-center cursor-pointer py-1"
+>
+  {/* Left: Exercise Name */}
   <div className="text-white font-medium">
     {exercise.name}
   </div>
 
-  <button
-    onClick={() => {
-      const updatedHistory = workoutHistory.map((w) => {
-        if (w.saveKey !== selectedDate) return w;
+  {/* Right: Summary + Arrow */}
+  <div className="flex items-center gap-3">
 
-        return {
-          ...w,
-          exercises: w.exercises.map((ex, exIdx) => {
-            if (exIdx !== i) return ex;
+  {!isExpanded && exercise.sets.length > 0 && (() => {
+  const bestSet = exercise.sets.reduce((best, current) => {
+    const bestWeight = Number(best.actualWeight || 0);
+    const bestReps = Number(best.actualReps || 0);
 
-            return {
-              ...ex,
-              sets: [
-                ...ex.sets,
-                { actualWeight: "", actualReps: "" }
-              ]
-            };
-          })
-        };
-      });
+    const currWeight = Number(current.actualWeight || 0);
+    const currReps = Number(current.actualReps || 0);
 
-      setWorkoutHistory(updatedHistory);
-    }}
-    className="text-xs text-purple-400"
-  >
-    + Add Set
-  </button>
+    if (
+      currWeight > bestWeight ||
+      (currWeight === bestWeight && currReps > bestReps)
+    ) {
+      return current;
+    }
+    return best;
+  }, exercise.sets[0]);
+
+  return (
+    <div className="text-xs text-purple-300 font-medium">
+      {bestSet.actualWeight || "-"} × {bestSet.actualReps || "-"}
+    </div>
+  );
+})()}
+    {/* Arrow */}
+    <div className="text-white/50 text-xs">
+      {isExpanded ? "▲" : "▼"}
+    </div>
+
+  </div>
 </div>
 
-      <div className="flex flex-col gap-2">
-        {exercise.sets.map((set, idx) => (
-          <div key={idx} className="flex items-center gap-2 bg-white/5 px-2 py-1 rounded-lg border border-white/5">
+      {/* Expanded Sets */}
+      {isExpanded && (
+        <div className="mt-3 space-y-2">
+          {exercise.sets.map((set, idx) => (
+            <div
+              key={idx}
+              className="flex justify-between items-center text-sm bg-white/[0.04] px-4 py-2 rounded-xl border border-white/[0.05]"
+            >
+              <div className="text-purple-300 text-xs">
+                SET {idx + 1}
+              </div>
 
-            <input
-              type="number"
-              placeholder="kg"
-              value={set.actualWeight}
-              onChange={(e) => {
-                const updatedHistory = workoutHistory.map((w) => {
-                  if (w.saveKey !== selectedDate) return w;
-
-                  return {
-                    ...w,
-                    exercises: w.exercises.map((ex, exIdx) => {
-                      if (exIdx !== i) return ex;
-
-                      return {
-                        ...ex,
-                        sets: ex.sets.map((s, sIdx) => {
-                          if (sIdx !== idx) return s;
-
-                          return {
-                            ...s,
-                            actualWeight: e.target.value
-                          };
-                        })
-                      };
-                    })
-                  };
-                });
-
-                setWorkoutHistory(updatedHistory);
-              }}
-              className="w-16 bg-transparent text-white border border-white/20 rounded px-2 py-1 text-sm"
-            />
-
-            <input
-              type="number"
-              placeholder="reps"
-              value={set.actualReps}
-              onChange={(e) => {
-                const updatedHistory = workoutHistory.map((w) => {
-                  if (w.saveKey !== selectedDate) return w;
-
-                  return {
-                    ...w,
-                    exercises: w.exercises.map((ex, exIdx) => {
-                      if (exIdx !== i) return ex;
-
-                      return {
-                        ...ex,
-                        sets: ex.sets.map((s, sIdx) => {
-                          if (sIdx !== idx) return s;
-
-                          return {
-                            ...s,
-                            actualReps: e.target.value
-                          };
-                        })
-                      };
-                    })
-                  };
-                });
-
-                setWorkoutHistory(updatedHistory);
-              }}
-              className="w-20 bg-white/10 text-white px-2 py-1 rounded"
-            />
-<button
-  onClick={() => {
-    const updatedHistory = workoutHistory.map((w) => {
-      if (w.saveKey !== selectedDate) return w;
-
-      return {
-        ...w,
-        exercises: w.exercises.map((ex, exIdx) => {
-          if (exIdx !== i) return ex;
-
-          return {
-            ...ex,
-            sets: ex.sets.filter((_, sIdx) => sIdx !== idx)
-          };
-        })
-      };
-    });
-
-    setWorkoutHistory(updatedHistory);
-  }}
-  className="text-red-400 text-xs px-1"
->
-  ✕
-</button>
-          </div>
-        ))}
-      </div>
-</div>
+              <div className="font-semibold text-white">
+                {set.actualWeight || "-"} kg × {set.actualReps || "-"}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 })}
             </div>
@@ -403,8 +272,12 @@ if (workout?.workoutType === "Push") {
             </div>
 
           <button
-            onClick={() => setShowLogOptions(true)}
-            className="w-full bg-purple-600 text-white py-2 rounded-xl"
+            onClick={() => {
+            setSelectedRoutine(null);
+            setSelectedDay(null);
+            setShowLogOptions(true);
+}}
+            className="w-full bg-purple-600 text-white py-2 rounded-xl transition-all duration-200 active:scale-[0.98]"
            >
             Log Workout
             </button>
@@ -418,61 +291,138 @@ if (workout?.workoutType === "Push") {
         Select Workout
       </div>
 
-      <div className="space-y-2">
-        {workoutOptions.map((opt, i) => (
-          <button
-            key={i}
-            onClick={() => {
-  // 1. Extract Day key (Day1, Day2...)
-  const dayNumber = opt.label.split(" ")[1]; // "1"
-  const formattedDay = `Day${dayNumber}`;
+<div className="space-y-2">
+  {!selectedRoutine ? (
+    routines?.map((routine, i) => (
+      <button
+        key={i}
+        onClick={() => setSelectedRoutine(routine)}
+        className="w-full text-left bg-white/5 hover:bg-white/10 p-2 rounded-lg text-white transition-all duration-200 active:scale-[0.98]"
+      >
+        {routine.name}
+      </button>
+    ))
+  ) : !selectedDay ? (
+    selectedRoutine.days?.map((day, i) => (
+      <button
+        key={i}
+        onClick={() => {
+  setSelectedDay(day);
 
-  const template = WORKOUT_SPLIT[formattedDay];
+const generatedWorkout = {
+  saveKey: selectedDate,
+  date: selectedDate,
 
-  if (!template || !selectedDate) return;
+  routineName: selectedRoutine.name,   // ✅ ADD THIS
+  workoutType: day.name,
 
-  // 2. Build new workout object
-  const newWorkout = {
-    saveKey: selectedDate,
-    date: selectedDate,
-    day: formattedDay,
-    workoutType: template.label,
-    exercises: template.exercises.map((name) => ({
-      name,
-      sets: [
-        {
-          actualWeight: "",
-          actualReps: ""
-        }
-      ]
+  exercises: day.exercises.map((ex) => ({
+    name: ex.name,
+    sets: ex.sets.map(() => ({
+      actualWeight: "",
+      actualReps: ""
     }))
-  };
+  }))
+};
 
-  // 3. Remove existing workout for same date
-  const filteredHistory = workoutHistory.filter(
-    (w) => w.saveKey !== selectedDate
-  );
-
-  // 4. Add new workout
-  const updatedHistory = [newWorkout, ...filteredHistory];
-console.log("UPDATED HISTORY:", updatedHistory);
-
-  // 5. Update state
-  setWorkoutHistory(updatedHistory);
-
-  // 6. Close modal
-  setShowLogOptions(false);
+  setTempWorkout(generatedWorkout);
 }}
-            className="w-full text-left bg-white/5 hover:bg-white/10 p-2 rounded-lg text-white"
-          >
-            {opt.label}
-          </button>
+        className="w-full text-left bg-white/5 hover:bg-white/10 p-2 rounded-lg text-white transition-all duration-200 active:scale-[0.98]"
+      >
+        {day.name}
+      </button>
+    ))
+  ) : (
+    <div className="space-y-3">
+  {tempWorkout?.exercises?.map((exercise, i) => (
+    <div key={i} className="bg-white/5 border border-white/10 rounded-lg p-2">
+      
+      <div className="text-white text-sm mb-2">
+        {exercise.name}
+      </div>
+
+      <div className="space-y-2">
+        {exercise.sets?.map((set, idx) => (
+          <div key={idx} className="flex gap-2">
+            
+            <input
+  type="number"
+  placeholder="kg"
+  value={set.actualWeight}
+  onChange={(e) => {
+    const updated = { ...tempWorkout };
+    updated.exercises[i].sets[idx].actualWeight = e.target.value;
+    setTempWorkout(updated);
+  }}
+  className="w-16 bg-transparent text-white border border-white/20 rounded px-2 py-1 text-sm"
+/>
+
+            <input
+  type="number"
+  placeholder="reps"
+  value={set.actualReps}
+  onChange={(e) => {
+    const updated = { ...tempWorkout };
+    updated.exercises[i].sets[idx].actualReps = e.target.value;
+    setTempWorkout(updated);
+  }}
+  className="w-20 bg-white/10 text-white px-2 py-1 rounded"
+/>
+            <button
+  onClick={() => {
+    const updated = { ...tempWorkout };
+
+    updated.exercises[i].sets = updated.exercises[i].sets.filter(
+      (_, sIdx) => sIdx !== idx
+    );
+
+    setTempWorkout(updated);
+  }}
+  className="text-red-400 text-xs px-1 transition-all duration-200 active:scale-[0.98]"
+>
+  <Trash2 size={16} />
+</button>
+
+          </div>
         ))}
       </div>
 
+    </div>
+  ))}
+</div>
+  )}
+</div>
+<button
+  onClick={() => {
+    if (!tempWorkout) return;
+
+    // Remove existing workout for same date
+    const filteredHistory = workoutHistory.filter(
+      (w) => w.saveKey !== selectedDate
+    );
+
+    // Add new workout
+    const updatedHistory = [tempWorkout, ...filteredHistory];
+
+    setWorkoutHistory(updatedHistory);
+
+    // Reset + close
+    setShowLogOptions(false);
+    setSelectedRoutine(null);
+    setSelectedDay(null);
+    setTempWorkout(null);
+  }}
+  className="w-full bg-green-600 text-white py-2 rounded-xl mb-3 transition-all duration-200 active:scale-[0.98]"
+>
+  Save Workout
+</button>
       <button
-        onClick={() => setShowLogOptions(false)}
-        className="mt-4 text-sm text-white/60"
+        onClick={() => {
+         setShowLogOptions(false);
+         setSelectedRoutine(null);
+         setSelectedDay(null);
+        }}
+        className="mt-4 text-sm text-white/60 transition-all duration-200 active:scale-[0.98]"
       >
         Cancel
       </button>
