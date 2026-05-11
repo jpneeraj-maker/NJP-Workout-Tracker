@@ -1,3 +1,4 @@
+import { supabase } from "./supabaseClient";
 import { useEffect, useState, useRef } from "react";
 import {
   DndContext,
@@ -64,21 +65,11 @@ const defaultProgram = {
   }
 };
 
-const [data, setData] = useState(() => {
-  const stored = localStorage.getItem("workout-app-data");
+const [data, setData] = useState(defaultProgram);
+const [isDataLoaded, setIsDataLoaded] = useState(false);
+const [hasLoadedCloudData, setHasLoadedCloudData] = useState(false);
 
- if (stored) {
-  const parsed = JSON.parse(stored);
-
-  if (parsed?.routines && Object.keys(parsed.routines).length > 0) {
-    return parsed;
-  }
-}
-
-  return defaultProgram;
-});
-
-const [selectedRoutine, setselectedRoutine] = useState(() => {
+const [selectedRoutine, setSelectedRoutine] = useState(() => {
   const saved = localStorage.getItem("selected-routine");
   return saved ? saved : "0";
 });
@@ -131,9 +122,8 @@ if (!bellRef.current) {
   bellRef.current = new Audio(bellSound);
 }
 
-const [workoutSeconds, setWorkoutSeconds] = useState(
-  savedWorkoutState.workoutSeconds ?? 0
-);
+const [workoutSeconds, setWorkoutSeconds] = useState(0);
+
 const [finalWorkoutSeconds, setFinalWorkoutSeconds] = useState(
   savedWorkoutState.finalWorkoutSeconds ?? 0
 );
@@ -174,7 +164,6 @@ const [completedWorkoutName, setCompletedWorkoutName] = useState("");
 const [completedWorkout, setCompletedWorkout] = useState(null);
 
 
-
 useEffect(() => {
   localStorage.setItem(
     "active-workout-state",
@@ -211,6 +200,157 @@ useEffect(() => {
   useEffect(() => {
     localStorage.setItem("workout-app-data", JSON.stringify(data));
   }, [data]);
+
+  useEffect(() => {
+  console.log("DATA CHANGED", data);
+}, [data]);
+
+  useEffect(() => {
+async function loadData() {
+  try {
+    console.log("LOAD STARTED");
+
+    const { data: row, error } = await supabase
+      .from("workout_data")
+      .select("data")
+      .eq("user_id", "default-user")
+      .maybeSingle();
+
+    if (error) throw error;
+console.log("SUPABASE DATA:", row?.data);
+
+const stored = localStorage.getItem("workout-app-data");
+const localData = stored ? JSON.parse(stored) : null;
+
+console.log("LOCAL DATA:", localData);
+
+const supabaseData = row?.data;
+const cloudWorkoutPlans = supabaseData?.workoutPlans;
+const cloudWorkoutHistory = supabaseData?.workoutHistory;
+const cloudSelectedRoutine = supabaseData?.selectedRoutine;
+const cloudSelectedDay = supabaseData?.selectedDay;
+const cloudWorkoutState = supabaseData?.activeWorkoutState;
+
+const hasSupabaseData =
+  !!cloudWorkoutPlans?.routines &&
+  Object.keys(cloudWorkoutPlans.routines || {}).length > 0;
+
+const hasLocalData =
+  localData &&
+  localData.routines &&
+  Object.keys(localData.routines).length > 0;
+
+// choose richer dataset
+console.log("SETTING DATA FROM: SUPABASE DIRECT");
+
+setData(cloudWorkoutPlans || defaultProgram);
+
+if (
+  cloudWorkoutHistory &&
+  cloudWorkoutHistory.length > 0
+) {
+  setWorkoutHistory(cloudWorkoutHistory);
+}
+
+if (cloudSelectedRoutine !== undefined) {
+  setSelectedRoutine(cloudSelectedRoutine);
+}
+
+if (cloudSelectedDay !== undefined) {
+  setSelectedDay(cloudSelectedDay);
+}
+
+  } catch (err) {
+    console.error("Supabase load failed", err);
+
+    const stored = localStorage.getItem("workout-app-data");
+    if (stored) {
+      setData(JSON.parse(stored));
+    }
+  } finally {
+    // ✅ ALWAYS runs
+    console.log("LOAD COMPLETE");
+    setIsDataLoaded(true);
+    setHasLoadedCloudData(true);
+  }
+}
+
+  loadData();
+}, []);
+
+ useEffect(() => {
+    if (!hasLoadedCloudData) return;
+    const timeout = setTimeout(async () => {
+      console.log("🔥 SAVE TRIGGERED", data);
+ const hasValidRoutines =
+  data?.routines &&
+  Array.isArray(data.routines) &&
+  data.routines.length > 0;
+
+const hasValidHistory =
+  Array.isArray(workoutHistory);
+
+if (!hasValidRoutines || !hasValidHistory) {
+  console.warn("⛔ Skipping save — invalid data");
+  return;
+}
+try {
+  await supabase
+    .from("workout_data")
+    .update({
+  data: {
+    workoutPlans: data,
+
+    workoutHistory,
+
+    activeWorkoutState: {
+      workoutMode,
+      activeWorkoutScreen,
+      activeExerciseIndex,
+      activeSetIndex,
+      workoutStartTime,
+      workoutSeconds,
+      restSeconds,
+      restPaused,
+      skippedSets,
+      activeScreen,
+      activeTab,
+      finalWorkoutSeconds,
+    },
+
+    selectedRoutine,
+    selectedDay,
+
+    exportDate: new Date().toISOString(),
+    version: 1,
+  },
+})
+    .eq("user_id", "default-user");
+    } catch (err) {
+      console.error("Supabase save failed", err);
+    }
+  }, 500);
+
+  return () => clearTimeout(timeout);
+}, [
+  data,
+  workoutHistory,
+  selectedRoutine,
+  selectedDay,
+  workoutMode,
+  activeWorkoutScreen,
+  activeExerciseIndex,
+  activeSetIndex,
+  workoutStartTime,
+  workoutSeconds,
+  restSeconds,
+  restPaused,
+  skippedSets,
+  activeScreen,
+  activeTab,
+  finalWorkoutSeconds,
+]);
+
 useEffect(() => {
   localStorage.setItem("selected-routine", selectedRoutine);
 }, [selectedRoutine]);
@@ -238,23 +378,23 @@ useEffect(() => {
     window.removeEventListener("popstate", handlePopState);
   };
 }, [activeScreen]);
+
 useEffect(() => {
-if (
-  !workoutMode ||
-  !workoutStartTime ||
-  activeWorkoutScreen === "summary"
-) {
-  return;
-}
+  if (
+    !workoutMode ||
+    restPaused ||
+    activeWorkoutScreen === "summary"
+  ) {
+    return;
+  }
 
   const interval = setInterval(() => {
-    setWorkoutSeconds(
-      Math.floor((Date.now() - workoutStartTime) / 1000)
-    );
+    setWorkoutSeconds(prev => prev + 1);
   }, 1000);
 
   return () => clearInterval(interval);
-}, [workoutMode, workoutStartTime, activeWorkoutScreen]);
+}, [workoutMode, restPaused, activeWorkoutScreen]);
+
 useEffect(() => {
   if (
     activeWorkoutScreen !== "rest-set" &&
@@ -262,30 +402,27 @@ useEffect(() => {
   ) {
     return;
   }
-const interval = setInterval(() => {
-  setRestSeconds((prev) => {
-    if (prev <= 1) {
-      // 🔔 play immediately
-      if (!restPaused) {
-        bellRef.current.currentTime = 0;
-        bellRef.current.play().catch(() => {});
+
+  const interval = setInterval(() => {
+    setRestSeconds((prev) => {
+      if (prev <= 1) {
+        if (!restPaused) {
+          bellRef.current.currentTime = 0;
+          bellRef.current.play().catch(() => {});
+        }
+
+        setRestPaused(true);
+        moveToNextWorkoutStep();
+
+        return 0;
       }
 
-      setRestPaused(true);
-      moveToNextWorkoutStep();
-
-      return 0;
-    }
-
-    return prev - 1;
-  });
-}, 1000);
+      return prev - 1;
+    });
+  }, 1000);
 
   return () => clearInterval(interval);
-}, [
-  activeWorkoutScreen,
-  restPaused
-]);
+}, [activeWorkoutScreen, restPaused]);
 
 
 const currentWeek = data?.routines?.[selectedRoutine] || null;
@@ -328,13 +465,25 @@ const hasWeightField =
   activeSet?.plannedWeight !== undefined;
 
   function updateSet(exerciseIndex, setIndex, field, value) {
-    const updated = { ...data };
-    updated.routines[activeWeekKey].days[activeDayIndex].exercises[exerciseIndex].sets[
-      setIndex
-    ][field] = value;
+  setData((prev) => {
+    const updated = JSON.parse(JSON.stringify(prev));
 
-    setData(updated);
-  }
+   const exercise =
+  updated.routines?.[activeWeekKey]
+    ?.days?.[activeDayIndex]
+    ?.exercises?.[exerciseIndex];
+
+if (!exercise) return prev;
+
+const set = exercise.sets?.[setIndex];
+
+if (!set) return prev;
+
+set[field] = value;
+    return updated;
+
+  });
+}
 
 function handleAddWeek() {
   setData((prev) => {
@@ -364,7 +513,7 @@ function handleAddWeek() {
     return updated;
   });
 
-  setselectedRoutine(String(Number(selectedRoutine) + 1));
+  setSelectedRoutine(String(Number(selectedRoutine) + 1));
   setSelectedDay(0);
 }
 function updateExerciseRemark(weekKey, dayIndex, exerciseIndex, value) {
@@ -486,6 +635,18 @@ function moveSet(exerciseIndex, setIndex, direction) {
   });
 }
 function startWorkout() {
+    
+  if (bellRef.current) {
+    bellRef.current.volume = 1;
+
+    bellRef.current.play()
+      .then(() => {
+        bellRef.current.pause();
+        bellRef.current.currentTime = 0;
+      })
+      .catch(() => {});
+  }
+  
   setWorkoutMode(true);
   setActiveWorkoutScreen("active");
 
@@ -592,10 +753,21 @@ if (activeSet) {
   const updated = { ...data };
   const routines = { ...updated.routines };
 
-  const week = routines[selectedRoutine];
-  const day = week?.days?.[selectedDay];
-  const exercise = day?.exercises?.[activeExerciseIndex];
-  const set = exercise?.sets?.[activeSetIndex];
+const week = routines?.[selectedRoutine];
+
+if (!week) return;
+
+const day = week.days?.[selectedDay];
+
+if (!day) return;
+
+const exercise = day.exercises?.[activeExerciseIndex];
+
+if (!exercise) return;
+
+const set = exercise.sets?.[activeSetIndex];
+
+if (!set) return;
 
   if (set) {
     if (
@@ -669,8 +841,16 @@ if (activeScreen === "landing") {
 />
   );
 }
-
+if (!isDataLoaded) 
+  {return (
+  <div className="min-h-screen flex items-center justify-center text-white">
+    Loading...
+  </div>
+);
+  }
+  console.log("APP WORKOUT HISTORY:", workoutHistory);
   return (
+   
     <div
   className="min-h-screen text-white"
   style={{
@@ -695,12 +875,8 @@ if (activeScreen === "landing") {
 >
   <div className="max-w-md mx-auto px-4">
 
-{!hasData ? (
-  <div className="text-white p-4">
-    No workout data. Go to Settings to create a routine.
-  </div>
-) : activeTab === "history" ? (
-  <HistoryPage
+{activeTab === "history" ? (
+<HistoryPage
     workoutHistory={workoutHistory}
     expandedHistoryIndex={expandedHistoryIndex}
     setExpandedHistoryIndex={setExpandedHistoryIndex}
@@ -715,6 +891,7 @@ if (activeScreen === "landing") {
 ) : activeTab === "settings" ? (
   <SettingsPage
     data={data}
+    setData={setData} 
     workoutHistory={workoutHistory}
     selectedRoutine={selectedRoutine}
     selectedDay={selectedDay}
@@ -728,7 +905,7 @@ if (activeScreen === "landing") {
 <WorkoutPreviewPage
   data={data}
   selectedRoutine={selectedRoutine}
-  setselectedRoutine={setselectedRoutine}
+  setSelectedRoutine={setSelectedRoutine}
   selectedDay={selectedDay}
   setSelectedDay={setSelectedDay}
   startWorkout={startWorkout}
@@ -736,6 +913,12 @@ if (activeScreen === "landing") {
   setSettingsSource={setSettingsSource}
   setActiveScreen={setActiveScreen}
   navigateWithTransition={navigateWithTransition}
+  setActiveExerciseIndex={setActiveExerciseIndex}
+  setActiveSetIndex={setActiveSetIndex}
+  setWorkoutSeconds={setWorkoutSeconds}
+  setRestSeconds={setRestSeconds}
+  setRestPaused={setRestPaused}
+  setWorkoutMode={setWorkoutMode}
 />
 ) : (
   <WorkoutPage {...{

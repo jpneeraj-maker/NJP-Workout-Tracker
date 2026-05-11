@@ -175,11 +175,11 @@ if (!bellRef.current) {
           <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
             <div className="mb-4 relative flex items-center justify-left text-sm text-white/70">
               <button
-                onClick={() => setWorkoutMode(false)}
-                className="text-xl leading-none text-white/70"
-              >
+               onClick={() => setShowEndWorkoutConfirm(true)}
+               className="text-xl leading-none text-white/70"
+               >
                 ←
-              </button>
+                </button>
       
               <div className="absolute left-1/2 transform -translate-x-1/2 text-center">
                 <div className="text-lg font-semibold text-white">
@@ -260,7 +260,8 @@ if (!bellRef.current) {
               </div>
       
               <div className="text-base text-white">
-                {activeSet.plannedWeight || "-"} kg × {activeSet.targetReps || "-"} reps
+                {activeSet.plannedWeight ?? activeSet.weight ?? "-"} kg × 
+                {activeSet.targetReps ?? activeSet.reps ?? "-"} reps
               </div>
             </div>
       
@@ -274,9 +275,9 @@ if (!bellRef.current) {
               type="text"
               inputMode="decimal"
               value={
-                      activeSet.actualWeight === undefined
-                      ? activeSet.plannedWeight || ""
-                      : activeSet.actualWeight
+                        activeSet.actualWeight === undefined
+                        ? activeSet.plannedWeight || ""
+                        : activeSet.actualWeight
                     }
               onChange={(e) =>
                 updateSet(
@@ -438,9 +439,13 @@ if (!bellRef.current) {
                 </div>
       
                 <div className="text-base text-white">
-                  {activeExercise.sets[activeSetIndex + 1]?.plannedWeight || "-"} kg ×{" "}
-                  {activeExercise.sets[activeSetIndex + 1]?.targetReps || "-"} reps
-                </div>
+                  {activeExercise.sets[activeSetIndex + 1]?.plannedWeight 
+                  ?? activeExercise.sets[activeSetIndex + 1]?.weight 
+                  ?? "-"} kg ×{" "}
+                  {activeExercise.sets[activeSetIndex + 1]?.targetReps 
+                  ?? activeExercise.sets[activeSetIndex + 1]?.reps 
+                  ?? "-"} reps
+                  </div>
               </div>
               <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-3">
         <div className="mb-2 text-[11px] uppercase tracking-[0.2em] text-white/50">
@@ -586,8 +591,12 @@ if (!bellRef.current) {
                 </div>
       
                 <div className="text-base text-white">
-                  {currentDay.exercises[activeExerciseIndex + 1]?.sets[0]?.plannedWeight || "-"} kg ×{" "}
-                  {currentDay.exercises[activeExerciseIndex + 1]?.sets[0]?.targetReps || "-"} reps
+                  {currentDay.exercises[activeExerciseIndex + 1]?.sets[0]?.plannedWeight 
+                  ?? currentDay.exercises[activeExerciseIndex + 1]?.sets[0]?.weight 
+                  ?? "-"} kg × {" "}
+                  {currentDay.exercises[activeExerciseIndex + 1]?.sets[0]?.targetReps 
+                  ?? currentDay.exercises[activeExerciseIndex + 1]?.sets[0]?.reps 
+                  ?? "-"} reps
                 </div>
               </div>
       <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-3">
@@ -1054,19 +1063,52 @@ activeWorkoutScreen === null && (
               All current progress will be kept.
             </div>
       
+           <button
+           onClick={() => {
+            // Resume later (pause + exit)
+            setShowEndWorkoutConfirm(false);
+            
+            // Save workout state
+            localStorage.setItem(
+              "active-workout-state",
+              JSON.stringify({
+                activeExerciseIndex,
+                activeSetIndex,
+                workoutSeconds,
+                restSeconds,
+                selectedRoutine: activeWeekKey,
+                selectedDay: activeDayIndex,
+                isPaused: true,
+                pausedAt: Date.now()
+              })
+            );
+
+            // Pause timers
+            setRestPaused(true);
+
+            // Exit workout
+            setWorkoutMode(false);
+          }}
+          className="mb-3 w-full rounded-2xl border border-yellow-500/30 bg-yellow-600/20 py-3 text-sm font-medium text-yellow-300"
+          >
+            Resume Later
+            </button>
+
             <button
-      onClick={() => {
-        setShowEndWorkoutConfirm(false);
-        handleFinishWorkout();
-      }}
-              className="mb-3 w-full rounded-2xl border border-red-500/30 bg-red-600/20 py-3 text-sm font-medium text-red-300"
+            onClick={() => {
+              // End workout completely
+              setShowEndWorkoutConfirm(false);
+              localStorage.removeItem("active-workout-state");
+              handleFinishWorkout();
+            }}
+            className="mb-3 w-full rounded-2xl border border-red-500/30 bg-red-600/20 py-3 text-sm font-medium text-red-300"
             >
               End Workout
             </button>
-      
+
             <button
-              onClick={() => setShowEndWorkoutConfirm(false)}
-              className="w-full rounded-2xl border border-white/10 bg-black/20 py-3 text-sm font-medium text-white"
+            onClick={() => setShowEndWorkoutConfirm(false)}
+            className="w-full rounded-2xl border border-white/10 bg-black/20 py-3 text-sm font-medium text-white"
             >
               Cancel
             </button>
