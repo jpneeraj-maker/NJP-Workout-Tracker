@@ -827,9 +827,18 @@ className={`mt-4 w-full rounded-2xl p-3 text-sm font-medium text-white ${
                   return;
                 }
 
+                const importedPlans = parsed.workoutPlans;
+                
+                if (
+                  importedPlans?.routines &&
+                  !Array.isArray(importedPlans.routines)
+                ) {
+                  importedPlans.routines =
+                  Object.values(importedPlans.routines);
+                }
                 localStorage.setItem(
                   "workout-app-data",
-                  JSON.stringify(parsed.workoutPlans)
+                  JSON.stringify(importedPlans)
                 );
 
                 localStorage.setItem(

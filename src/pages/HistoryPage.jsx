@@ -17,7 +17,7 @@ export default function HistoryPage(props) {
 console.log("ROUTINES DATA:", routines);
 const [selectedRoutine, setSelectedRoutine] = React.useState(null);
 const [selectedDay, setSelectedDay] = React.useState(null);
-const [tempWorkout, setTempWorkout] = React.useState(null);
+
 const [expandedExerciseIndex, setExpandedExerciseIndex] = React.useState(null);
 const getTodayKey = () => {
   const today = new Date();
@@ -52,7 +52,10 @@ const selectedWorkout = selectedDate
   ? historyByDate[selectedDate]
   : null;
 
-  const activeWorkout = isEditing ? editableWorkout : selectedWorkout;
+  const activeWorkout =
+  isEditing
+    ? editableWorkout
+    : selectedWorkout;
   const todayKey = getTodayKey();
   const isFutureDate =
   selectedDate && selectedDate > todayKey;
@@ -203,7 +206,7 @@ className={`h-10 flex flex-col items-center justify-center rounded-lg cursor-poi
 
       {/* Selected Workout Panel */}
       <div className="mt-6 bg-black/40 backdrop-blur-md border border-yellow-500/30 rounded-2xl p-4 shadow-lg shadow-black/40">
-{selectedWorkout ? (
+{selectedWorkout || isEditing ? (
  !isEditing && selectedWorkout.type === "rest" ? (
 
   <>
@@ -643,128 +646,54 @@ className={`rounded-2xl p-4 transition-all duration-300 ease-out
     selectedRoutine.days?.map((day, i) => (
       <button
         key={i}
-        onClick={() => {
-  setSelectedDay(day);
+onClick={() => {
+  const generatedWorkout = {
+    ...createWorkoutEntry({
+      date: selectedDate,
+      routineName: selectedRoutine.name,
+      workoutType: day.name
+    }),
 
-const generatedWorkout = {
-  ...createWorkoutEntry({
-    date: selectedDate,
-    routineName: selectedRoutine.name,
-    workoutType: day.name
-  }),
+    exercises: day.exercises.map((ex) => ({
+      name: ex.name,
+      sets: ex.sets.map(() => createEmptySet())
+    }))
+  };
 
-  exercises: day.exercises.map((ex) => ({
-    name: ex.name,
-    sets: ex.sets.map(() => (
-       createEmptySet()
-    ))
-  }))
-};
+  setEditableWorkout(generatedWorkout);
 
-  setTempWorkout(generatedWorkout);
+  setIsEditing(true);
+
+  setShowLogOptions(false);
+
+  setSelectedRoutine(null);
+  setSelectedDay(null);
+
+  setExpandedExerciseIndex(0);
 }}
         className="w-full text-left bg-white/5 hover:bg-white/10 p-2 rounded-lg text-white transition-all duration-200 active:scale-[0.98]"
       >
         {day.name}
       </button>
     ))
-  ) : (
-    <div className="space-y-3">
-  {tempWorkout?.exercises?.map((exercise, i) => (
-    <div key={i} className="bg-white/5 border border-white/10 rounded-lg p-2">
-      
-      <div className="text-white text-sm mb-2">
-        {exercise.name}
-      </div>
-
-      <div className="space-y-2">
-        {exercise.sets?.map((set, idx) => (
-          <div key={idx} className="flex gap-2">
-            
-            <input
-  type="number"
-  placeholder="kg"
-  value={set.actualWeight}
-  onChange={(e) => {
-    const updated = structuredClone(tempWorkout);
-    updated.exercises[i].sets[idx].actualWeight = e.target.value;
-    setTempWorkout(updated);
-  }}
-  className="w-16 bg-transparent text-white border border-white/20 rounded px-2 py-1 text-sm"
-/>
-
-            <input
-  type="number"
-  placeholder="reps"
-  value={set.actualReps}
-  onChange={(e) => {
-    const updated = structuredClone(tempWorkout);
-    updated.exercises[i].sets[idx].actualReps = e.target.value;
-    setTempWorkout(updated);
-  }}
-  className="w-20 bg-white/10 text-white px-2 py-1 rounded"
-/>
-            <button
-  onClick={() => {
-    const updated = structuredClone(tempWorkout);
-
-    updated.exercises[i].sets = updated.exercises[i].sets.filter(
-      (_, sIdx) => sIdx !== idx
-    );
-
-    setTempWorkout(updated);
-  }}
-  className="text-red-400 text-xs px-1 transition-all duration-200 active:scale-[0.98]"
->
-  <Trash2 size={16} />
-</button>
-
-          </div>
-        ))}
-      </div>
-
-    </div>
-  ))}
+  ) : null}
 </div>
-  )}
-</div>
+
 <button
   onClick={() => {
-    if (!tempWorkout) return;
-
-    // Remove existing workout for same date
-    const filteredHistory = workoutHistory.filter(
-      (w) => w.saveKey !== selectedDate
-    );
-
-    // Add new workout
-    const updatedHistory = [tempWorkout, ...filteredHistory];
-
-    setWorkoutHistory(updatedHistory);
-
-    // Reset + close
     setShowLogOptions(false);
     setSelectedRoutine(null);
     setSelectedDay(null);
-    setTempWorkout(null);
   }}
-  className="w-full bg-green-600 text-white py-2 rounded-xl mb-3 transition-all duration-200 active:scale-[0.98]"
+  className="mt-4 text-sm text-white/60 transition-all duration-200 active:scale-[0.98]"
 >
-  Save Workout
+  Cancel
 </button>
-      <button
-        onClick={() => {
-         setShowLogOptions(false);
-         setSelectedRoutine(null);
-         setSelectedDay(null);
-        }}
-        className="mt-4 text-sm text-white/60 transition-all duration-200 active:scale-[0.98]"
-      >
-        Cancel
-      </button>
+
     </div>
   </div>
 )}
+
     </>
   );
 }
