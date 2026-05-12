@@ -116,6 +116,7 @@ const selectedRoutineData =
   routinesArray[activeRoutineIndex] || null;
 
 const [expandedDayIndex, setExpandedDayIndex] = useState(null);
+const [expandedExercises, setExpandedExercises] = useState({});
 const exerciseLibrary = [
   ...new Set(
     draftProgram?.routines || []
@@ -162,136 +163,134 @@ async function handleUploadToCloud() {
 
 return (    
     <>
-    <div className="mb-4">
+   <div className="mb-4 flex items-center gap-3">
+
+  {/* Back */}
   <button
-        onClick={() => {
-        if (props.settingsSource === "preview") {
+    onClick={() => {
+      if (props.settingsSource === "preview") {
         props.setActiveTab("workout");
-        } else {
-         props.setActiveScreen("landing");
-         }
-        }}
-    className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-black/60 backdrop-blur-md text-white text-base border border-white/10 hover:bg-black/70 active:scale-[0.97] transition"
-  >
-  <ArrowLeft size={14} />
-  </button>
-</div>
-<div className="mb-4 flex gap-2 overflow-x-auto flex items-center justify-center">
-    {(draftProgram?.routines || []).map((routine, index) => (
- <div
-  key={index}
-  className={`px-3 py-2 rounded-xl ${
-    activeRoutineIndex === index
-      ? "bg-purple-600"
-      : "bg-black/60 backdrop-blur-md"
-  }`}
->
-  <input
-    value={routine.name ?? ""}
-    onClick={() => setActiveRoutineIndex(index)}
-    onChange={(e) => {
-    const updated = { ...draftProgram };
-    const routinesArray = [...updated.routines];
-
-    routinesArray[index].name = e.target.value; 
-
-    updated.routines = routinesArray;
-
-      setDraftProgram(updated);
+      } else {
+        props.setActiveScreen("landing");
+      }
     }}
-      onBlur={(e) => {
-    if (!e.target.value.trim()) {
-      const updated = { ...draftProgram };
-      const routinesArray = [...updated.routines];
+    className="shrink-0 inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-black/80 backdrop-blur-md text-white border border-white/10 hover:bg-black/70 active:scale-[0.97] transition"
+  >
+    <ArrowLeft size={16} />
+  </button>
 
-      routinesArray[index].name = `Routine ${index + 1}`;
+  {/* Routine Tabs */}
+  <div className="flex items-center gap-3 overflow-x-auto whitespace-nowrap flex-1">
+    {(draftProgram?.routines || []).map((routine, index) => (
+      <div
+        key={index}
+        className={`shrink-0 px-4 py-3 rounded-2xl ${
+          activeRoutineIndex === index
+            ? "bg-purple-600"
+            : "bg-black/80 backdrop-blur-md"
+        }`}
+      >
+        <input
+          value={routine.name ?? ""}
+          onClick={() => setActiveRoutineIndex(index)}
+          onChange={(e) => {
+            const updated = { ...draftProgram };
+            const routinesArray = [...updated.routines];
 
-      updated.routines = routinesArray;
+            routinesArray[index].name = e.target.value;
 
-      setDraftProgram(updated);
-    }
-  }}
-    className="bg-transparent text-white text-sm outline-none w-full text-center"
-  />
-</div>
+            updated.routines = routinesArray;
+
+            setDraftProgram(updated);
+          }}
+          onBlur={(e) => {
+            if (!e.target.value.trim()) {
+              const updated = { ...draftProgram };
+              const routinesArray = [...updated.routines];
+
+              routinesArray[index].name = `Routine ${index + 1}`;
+
+              updated.routines = routinesArray;
+
+              setDraftProgram(updated);
+            }
+          }}
+          className="bg-transparent text-white text-sm outline-none text-center min-w-[160px]"
+        />
+      </div>
     ))}
 
-      <button
-onClick={() => {
-  const copy = confirm("Copy last routine's routine?");
+    <button
+      onClick={() => {
+        const copy = confirm("Copy last routine's routine?");
 
- setDraftProgram((prev) => {
-  const updated = JSON.parse(JSON.stringify(prev));
+        setDraftProgram((prev) => {
+          const updated = JSON.parse(JSON.stringify(prev));
 
-  const routinesArray = updated.routines;
+          const routinesArray = updated.routines;
 
-  let newRoutine;
+          let newRoutine;
 
-  if (copy && routinesArray.length > 0) {
-    newRoutine = JSON.parse(
-      JSON.stringify(routinesArray[routinesArray.length - 1])
-    );
-  } else {
-    newRoutine = {
-      name: `Routine ${routinesArray.length + 1}`,
-      days: [
-        {
-          name: "New Day",
-          exercises: []
-        }
-      ]
-    };
-  }
+          if (copy && routinesArray.length > 0) {
+            newRoutine = JSON.parse(
+              JSON.stringify(routinesArray[routinesArray.length - 1])
+            );
+          } else {
+            newRoutine = {
+              name: `Routine ${routinesArray.length + 1}`,
+              days: [
+                {
+                  name: "New Day",
+                  exercises: []
+                }
+              ]
+            };
+          }
 
-  routinesArray.push(newRoutine);
+          routinesArray.push(newRoutine);
 
-  return updated;
-});
-}}
-    className="px-4 py-2 rounded-xl bg-black/60 backdrop-blur-md text-white/70 transition-all duration-200 active:scale-[0.98] "
-  >
-    +
-  </button>
+          return updated;
+        });
+      }}
+      className="shrink-0 px-4 py-2 rounded-2xl bg-black/80 backdrop-blur-md text-white/70 transition-all duration-200 active:scale-[0.98]"
+    >
+      +
+    </button>
 
     <button
-  onClick={() => {
-  const routinesArray = draftProgram.routines;
+      onClick={() => {
+        const routinesArray = draftProgram.routines;
 
-  // 🔴 1. Prevent deleting last routine (ADD THIS HERE)
-  if (routinesArray.length === 1) {
-    alert("At least one routine is required.");
-    return;
-  }
+        if (routinesArray.length === 1) {
+          alert("At least one routine is required.");
+          return;
+        }
 
-  const routineName =
-    routinesArray[activeRoutineIndex]?.name ||
-    `Routine ${activeRoutineIndex + 1}`;
+        const routineName =
+          routinesArray[activeRoutineIndex]?.name ||
+          `Routine ${activeRoutineIndex + 1}`;
 
-  // 🔴 2. Confirm AFTER guard
-  if (!confirm(`Delete ${routineName}?`)) return;
+        if (!confirm(`Delete ${routineName}?`)) return;
 
-  const updated = { ...draftProgram };
-  const updatedRoutinesArray = [...updated.routines];
+        const updated = { ...draftProgram };
+        const updatedRoutinesArray = [...updated.routines];
 
-  // remove current routine
-  updatedRoutinesArray.splice(activeRoutineIndex, 1);
+        updatedRoutinesArray.splice(activeRoutineIndex, 1);
 
-  // 🔴 3. REMOVE this block (no longer needed)
-  // if (routinesArray.length === 0) { ... }
+        updated.routines = updatedRoutinesArray;
 
-  updated.routines = updatedRoutinesArray;
+        setDraftProgram(updated);
 
-  setDraftProgram(updated);
-
-  setActiveRoutineIndex((prev) =>
-    Math.max(0, prev - 1)
-  );
-}}
-  className="text-red-400 hover:text-red-300 transition transition-all duration-200 active:scale-[0.98] "
->
-  <Trash2 size={22} />
-</button>
+        setActiveRoutineIndex((prev) =>
+          Math.max(0, prev - 1)
+        );
+      }}
+      className="shrink-0 text-red-400 hover:text-red-300 transition-all duration-200 active:scale-[0.98]"
+    >
+      <Trash2 size={22} />
+    </button>
   </div>
+</div>
 
 {!routinesArray.length ? (
   <div className="text-white/50 text-sm mt-4">
@@ -310,15 +309,26 @@ onClick={() => {
   <div className="mb-4 space-y-3">
     {selectedRoutineData.days.map((day, dayIndex) => (
       <div
-        key={dayIndex}
-        className="rounded-2xl bg-black/60 backdrop-blur-md p-4 text-white cursor-pointer"
+      key={dayIndex}
+      className={`group rounded-3xl border transition-all duration-300 overflow-hidden cursor-pointer active:scale-[0.992]
+  ${
+    expandedDayIndex === dayIndex
+      ? "border-purple-500/50 bg-zinc-950 shadow-[0_0_30px_rgba(168,85,247,0.22)]"
+      : "border-white/10 bg-zinc-950/92 hover:border-purple-500/30"
+  }`}
         onClick={() =>
           setExpandedDayIndex(
             expandedDayIndex === dayIndex ? null : dayIndex
           )
         }
       >
-        <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3 px-5 py-5">
+<div className="flex items-center gap-4 flex-1">
+
+  <div className="text-purple-400 text-sm font-semibold tracking-wide">
+    {String(dayIndex + 1).padStart(2, "0")}
+  </div>
+
   <input
     type="text"
     value={day.name ?? ""}
@@ -336,22 +346,23 @@ onClick={() => {
       setDraftProgram(updated);
     }}
     onBlur={(e) => {
-  if (!e.target.value.trim()) {
-    const updated = { ...draftProgram };
-    const routinesArray = [...updated.routines];
+      if (!e.target.value.trim()) {
+        const updated = { ...draftProgram };
+        const routinesArray = [...updated.routines];
 
-    routinesArray[activeRoutineIndex]
-      .days[dayIndex]
-      .name = `Day ${dayIndex + 1}`;
+        routinesArray[activeRoutineIndex]
+          .days[dayIndex]
+          .name = `Day ${dayIndex + 1}`;
 
-    updated.routines = routinesArray;
+        updated.routines = routinesArray;
 
-    setDraftProgram(updated);
-  }
-}}
-    className="bg-transparent text-white font-medium outline-none"
+        setDraftProgram(updated);
+      }
+    }}
+    className="bg-transparent text-white text-lg font-semibold outline-none w-full"
   />
-  <div className="flex items-center gap-2 ml-auto">
+</div>
+  <div className="flex items-center gap-4 ml-auto text-white/40">
   <button
   onClick={(e) => {
     e.stopPropagation();
@@ -424,14 +435,37 @@ setDraftProgram((prev) => {
 </div>
 
 </div>
+<div className="px-5 pb-4 flex items-center justify-between text-xs text-white/35">
+  <div>
+    {day.exercises?.length || 0} exercises
+  </div>
 
+  <div className="text-purple-400/70">
+    {expandedDayIndex === dayIndex ? "Collapse" : "Expand"}
+  </div>
+</div>
         {/* Expanded section */}
         {expandedDayIndex === dayIndex && (
-          <div className="mt-3 space-y-2">
+  <div className="mt-3 space-y-2 animate-fadeSlide">
 {day.exercises?.map((exercise, exIndex) => (
-  <div key={exIndex} className="text-sm text-white/70">
-    <div className="flex items-center justify-between gap-2">
-  <div className="relative w-full">
+  <div
+  key={exIndex}
+  className="rounded-2xl border border-white/5 bg-black/40 backdrop-blur-xl overflow-hidden"
+>
+    <div
+  onClick={(e) => {
+    e.stopPropagation();
+
+    const key = `${dayIndex}-${exIndex}`;
+
+    setExpandedExercises((prev) => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  }}
+  className="flex items-start gap-3 p-4 cursor-pointer transition-transform duration-150 active:scale-[0.985]"
+>
+  <div className="flex-1">
     <input
   type="text"
   value={exercise.name ?? ""}
@@ -468,43 +502,11 @@ onBlur={(e) => {
     setSearchTerm(""); // 🔴 ADD THIS
   }, 150);
 }}
-  className="bg-black text-white rounded px-2 py-1 text-sm border border-white/20 w-full"
+  className="bg-transparent text-white text-lg font-semibold outline-none w-full"
 />
-{/*searchTerm && (
-  <div className="absolute top-full left-0 w-full mt-1 max-h-40 overflow-y-auto rounded-xl bg-black border border-white/10 z-50 shadow-lg">
-    {exerciseLibrary
-      .filter((ex) =>
-        ex.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-      .slice(0, 5)
-      .map((ex, i) => (
-        <div
-          key={i}
-          onClick={(e) => {
-  e.preventDefault();   // 🔴 ADD
-  e.stopPropagation();
-
-  const updated = { ...draftProgram };
-  const routinesArray = [...updated.routines];
-
-  routinesArray[activeRoutineIndex]
-    .days[dayIndex]
-    .exercises[exIndex]
-    .name = ex;
-
-  updated.routines = routinesArray;
-
-  setDraftProgram(updated);
-
-  setSearchTerm("");   // closes dropdown
-}}
-          className="px-3 py-2 text-sm text-white hover:bg-white/10 cursor-pointer"
-        >
-          {ex}
-        </div>
-      ))}
-  </div>
-)*/}
+</div>
+<div className="text-xs text-white/40 px-1">
+  {expandedExercises[`${dayIndex}-${exIndex}`] ? "▲" : "▼"}
 </div>
 <button
   onClick={(e) => {
@@ -583,75 +585,101 @@ onBlur={(e) => {
 </button>
     </div>
 
-<div className="ml-3 mt-2 space-y-2 text-xs text-white/50">
+{expandedExercises[`${dayIndex}-${exIndex}`] && (
+  <div className="mt-5 space-y-3 px-4 pb-4 animate-fadeSlide">
   {exercise.sets?.map((set, setIndex) => (
-    <div key={setIndex} className="flex items-center gap-2">
-      <span>Set {setIndex + 1}:</span>
+    <div
+  key={setIndex}
+  className="grid grid-cols-[50px_minmax(0,1fr)_minmax(0,1fr)_40px] items-center gap-3 rounded-2xl border border-white/5 bg-black/30 px-3 py-3 transition-all duration-150 active:scale-[0.99]"
+>
+  {/* Set Number */}
+  <div className="flex items-center justify-center">
+    <div className="w-9 h-9 rounded-full border border-purple-500/20 bg-purple-500/5 flex items-center justify-center text-sm font-semibold text-purple-300">
+      {setIndex + 1}
+    </div>
+  </div>
 
-      <input
-        type="number"
-        value={set.reps || ""}
-        onClick={(e) => e.stopPropagation()}
-        onChange={(e) => {
-          const value = e.target.value;
-          setDraftProgram((prev) => {
-            const updated = JSON.parse(JSON.stringify(prev));
-            updated.routines[activeRoutineIndex]
+  {/* Weight */}
+  <div>
+    <div className="w-full text-center text-[10px] uppercase tracking-wider text-white/30 mb-1">
+      Weight
+    </div>
+
+    <input
+      type="number"
+      value={set.weight || ""}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        const value = e.target.value;
+
+        setDraftProgram((prev) => {
+          const updated = JSON.parse(JSON.stringify(prev));
+
+          updated.routines[activeRoutineIndex]
+            .days[dayIndex]
+            .exercises[exIndex]
+            .sets[setIndex]
+            .weight = Number(value);
+
+          return updated;
+        });
+      }}
+      className="no-spinner block w-full rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-white text-center"
+    />
+  </div>
+
+  {/* Reps */}
+  <div>
+    <div className="w-full text-center text-[10px] uppercase tracking-wider text-white/30 mb-1">
+      Reps
+    </div>
+
+    <input
+      type="number"
+      value={set.reps || ""}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        const value = e.target.value;
+
+        setDraftProgram((prev) => {
+          const updated = JSON.parse(JSON.stringify(prev));
+
+          updated.routines[activeRoutineIndex]
             .days[dayIndex]
             .exercises[exIndex]
             .sets[setIndex]
             .reps = Number(value);
 
-    return updated;
-  });
-}}
-        className="w-12 rounded bg-black/60 backdrop-blur-md px-1 text-white"
-      />
+          return updated;
+        });
+      }}
+      className="no-spinner block w-full rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-white text-center"
+    />
+  </div>
 
-      <span>reps X</span>
+  {/* Delete */}
+  <button
+    onClick={(e) => {
+      e.stopPropagation();
 
-      <input
-        type="number"
-        value={set.weight || ""}
-        onClick={(e) => e.stopPropagation()}
-        onChange={(e) => {
-          const value = e.target.value;
-          setDraftProgram((prev) => {
-          const updated = JSON.parse(JSON.stringify(prev));
-          updated.routines[activeRoutineIndex]
-                .days[dayIndex]
-                .exercises[exIndex]
-                .sets[setIndex]
-                .weight = Number(value);
-    return updated;
-  });
-}}
-        className="w-16 rounded bg-black/60 backdrop-blur-md px-1 text-white"
-      />
+      if (!confirm("Delete this set?")) return;
 
-      <span>kg</span>
-<button
-  onClick={(e) => {
-    e.stopPropagation();
+      setDraftProgram((prev) => {
+        const updated = JSON.parse(JSON.stringify(prev));
 
-    if (!confirm("Delete this set?")) return;
+        updated.routines[activeRoutineIndex]
+          .days[dayIndex]
+          .exercises[exIndex]
+          .sets.splice(setIndex, 1);
 
-    setDraftProgram((prev) => {
-  const updated = JSON.parse(JSON.stringify(prev));
-
-  updated.routines[activeRoutineIndex]
-    .days[dayIndex]
-    .exercises[exIndex]
-    .sets.splice(setIndex, 1);
-
-  return updated;
-});
-  }}
-  className="text-red-400 hover:text-red-300 transition transition-all duration-200 active:scale-[0.98]"
->
-  <Trash2 size={14} />
-</button>
-    </div>
+        return updated;
+      });
+    }}
+    className="flex items-center justify-center text-red-400 hover:text-red-300"
+  >
+    <Trash2 size={15} />
+  </button>
+</div>
   ))}
   <button
   onClick={(e) => {
@@ -668,12 +696,12 @@ onBlur={(e) => {
   return updated;
 });
   }}
-  className="mt-2 text-xs text-purple-300 transition-all duration-200 active:scale-[0.98]"
->
+  className="mt-3 text-sm text-purple-300 hover:text-purple-200 transition-all duration-200 active:scale-[0.98]">
   + Add Set
 </button>
 </div>
-  </div>
+)}
+</div>
   ))}
     <button
   onClick={(e) => {
@@ -692,7 +720,7 @@ onBlur={(e) => {
   return updated;
 });
   }}
-  className="mt-3 text-sm text-purple-300 transition-all duration-200 active:scale-[0.98]"
+  className="mt-4 w-full rounded-2xl border border-purple-500/20 bg-purple-500/5 py-3 text-sm text-purple-300 hover:bg-purple-500/10 transition-all duration-200 active:scale-[0.98]"
 >
   + Add Exercise
 </button>
