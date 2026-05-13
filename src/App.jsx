@@ -22,7 +22,6 @@ import HistoryPage from "./pages/HistoryPage";
 import { workoutData } from "./workoutData.js";
 
 import appBackground from "./app-background.png";
-import bellSound from "./Assets/sounds/rest-complete/timer-end-bell.mp3";
 
 function SortableExerciseCard({ id, children }) {
   const {
@@ -115,11 +114,42 @@ const [activeSetIndex, setActiveSetIndex] = useState(
 const [workoutStartTime, setWorkoutStartTime] = useState(
   savedWorkoutState.workoutStartTime ?? null
 );
+const audioContextRef = useRef(null);
 
-const bellRef = useRef(null);
+function playTimerBeep() {
+const AudioContextClass =
+  window.AudioContext || window.webkitAudioContext;
 
-if (!bellRef.current) {
-  bellRef.current = new Audio(bellSound);
+if (!audioContextRef.current) {
+  audioContextRef.current = new AudioContextClass();
+}
+
+const audioContext = audioContextRef.current;
+
+if (audioContext.state === "suspended") {
+  audioContext.resume();
+}
+
+  const oscillator = audioContext.createOscillator();
+  const gainNode = audioContext.createGain();
+
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(
+    880,
+    audioContext.currentTime
+  );
+
+  gainNode.gain.setValueAtTime(
+    0.03,
+    audioContext.currentTime
+  );
+
+  oscillator.connect(gainNode);
+  gainNode.connect(audioContext.destination);
+
+  oscillator.start();
+
+  oscillator.stop(audioContext.currentTime + 0.18);
 }
 
 const [workoutSeconds, setWorkoutSeconds] = useState(0);
@@ -282,10 +312,9 @@ if (cloudSelectedDay !== undefined) {
     if (!hasLoadedCloudData) return;
     const timeout = setTimeout(async () => {
       console.log("🔥 SAVE TRIGGERED", data);
- const hasValidRoutines =
+const hasValidRoutines =
   data?.routines &&
-  Array.isArray(data.routines) &&
-  data.routines.length > 0;
+  Object.keys(data.routines).length > 0;
 
 const hasValidHistory =
   Array.isArray(workoutHistory);
@@ -407,8 +436,7 @@ useEffect(() => {
     setRestSeconds((prev) => {
       if (prev <= 1) {
         if (!restPaused) {
-          bellRef.current.currentTime = 0;
-          bellRef.current.play().catch(() => {});
+          playTimerBeep();
         }
 
         setRestPaused(true);
@@ -636,16 +664,7 @@ function moveSet(exerciseIndex, setIndex, direction) {
 }
 function startWorkout() {
     
-  if (bellRef.current) {
-    bellRef.current.volume = 1;
-
-    bellRef.current.play()
-      .then(() => {
-        bellRef.current.pause();
-        bellRef.current.currentTime = 0;
-      })
-      .catch(() => {});
-  }
+  playTimerBeep();
   
   setWorkoutMode(true);
   setActiveWorkoutScreen("active");
@@ -679,8 +698,10 @@ const workoutRecord = {
   }),
     week: selectedRoutine,
     day: currentDay.name,
-exercises: (currentDay?.exercises || [])
-  .map((exercise) => ({
+    workoutType: currentDay.name,
+    duration: formatTime(workoutSeconds),
+    exercises: (currentDay?.exercises || [])
+    .map((exercise) => ({
     name: exercise.name,
     remarks: exercise.remarks || "",
     sets: exercise.sets

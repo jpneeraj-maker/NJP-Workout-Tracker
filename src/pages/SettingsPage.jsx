@@ -463,9 +463,9 @@ setDraftProgram((prev) => {
       [key]: !prev[key]
     }));
   }}
-  className="flex items-start gap-3 p-4 cursor-pointer transition-transform duration-150 active:scale-[0.985]"
+  className="flex items-start gap-3 p-4 cursor-pointer"
 >
-  <div className="flex-1">
+  <div className="flex-1 transition-transform duration-150 active:scale-[0.985]">
     <input
   type="text"
   value={exercise.name ?? ""}
@@ -602,11 +602,11 @@ onBlur={(e) => {
   {/* Weight */}
   <div>
     <div className="w-full text-center text-[10px] uppercase tracking-wider text-white/30 mb-1">
-      Weight
+      Weight/Band
     </div>
 
     <input
-      type="number"
+      type="text"
       value={set.weight || ""}
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => {
@@ -619,7 +619,7 @@ onBlur={(e) => {
             .days[dayIndex]
             .exercises[exIndex]
             .sets[setIndex]
-            .weight = Number(value);
+            .weight = value;
 
           return updated;
         });
@@ -631,7 +631,7 @@ onBlur={(e) => {
   {/* Reps */}
   <div>
     <div className="w-full text-center text-[10px] uppercase tracking-wider text-white/30 mb-1">
-      Reps
+      Reps/Secs
     </div>
 
     <input

@@ -273,7 +273,6 @@ if (!bellRef.current) {
           <div>
             <input
               type="text"
-              inputMode="decimal"
               value={
                         activeSet.actualWeight === undefined
                         ? activeSet.plannedWeight || ""
@@ -316,7 +315,7 @@ if (!bellRef.current) {
             />
       
             <div className="text-center text-xs text-white/50">
-              reps
+              reps/secs
             </div>
           </div>
         </div>
