@@ -4,7 +4,7 @@ export default function WorkoutPreviewPage(props) {
   const {
     data,
     selectedRoutine,
-    setselectedRoutine,
+    setSelectedRoutine,
     selectedDay,
     setSelectedDay,
     setActiveTab,
@@ -43,6 +43,11 @@ useEffect(() => {
     setIsTransitioning(false);
   }, 250);
 }
+
+console.log("Selected Routine:", selectedRoutine);
+console.log("Routine Keys:", Object.keys(data?.routines || {}));
+console.log("Current Routine:", currentRoutine);
+
 return (
   <>
 
@@ -68,7 +73,8 @@ return (
     <button
       key={routineKey}
       onClick={() => {
-        setselectedRoutine(routineKey);
+        console.log("Clicked:", routineKey);
+        setSelectedRoutine(routineKey);
         setSelectedDay(0);
       }}
       className={`px-6 py-1 rounded-xl text-sm whitespace-nowrap ${
@@ -201,7 +207,7 @@ return (
   if (!saved || saved.activeExerciseIndex === undefined) return;
 
   // restore
-  setselectedRoutine(saved.selectedRoutine || 0);
+  setSelectedRoutine(saved.selectedRoutine || 0);
   setSelectedDay(saved.selectedDay || 0);
 
   setActiveExerciseIndex(saved.activeExerciseIndex || 0);
