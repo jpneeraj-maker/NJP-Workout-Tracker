@@ -532,6 +532,8 @@ const repDialValues = useMemo(
                 <img
                   src={activeExerciseImage}
                   alt={activeExercise?.name || "Exercise"}
+                  loading="lazy"
+                  decoding="async"
                   className="h-full w-full object-contain"
                 />
               ) : (

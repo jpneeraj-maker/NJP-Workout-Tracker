@@ -1587,7 +1587,7 @@ if (!isDataLoaded)
   }
   console.log("APP WORKOUT HISTORY:", workoutHistory);
   return (
-    <div className="relative min-h-screen text-white">
+    <div className="relative min-h-screen text-white app-safe">
       <div
         aria-hidden="true"
         className="pointer-events-none fixed inset-0 z-0 bg-black"

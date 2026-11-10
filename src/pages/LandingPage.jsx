@@ -19,7 +19,7 @@ export default function LandingPage({
 }) {
   return (
     <div
-      className="fixed inset-0 flex items-end justify-center pb-4"
+      className="fixed inset-0 flex items-end justify-center pb-[max(1rem,env(safe-area-inset-bottom))]"
       style={{
         backgroundImage: `url(${landingBg})`,
         backgroundSize: "cover",

@@ -356,6 +356,8 @@ export default function WorkoutPreviewPage(props) {
           <img
             src={exerciseImage}
             alt=""
+            loading="lazy"
+            decoding="async"
             className="h-full w-full object-cover"
           />
         ) : (
@@ -428,7 +430,7 @@ export default function WorkoutPreviewPage(props) {
   })}
 </div>
 
-<div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md px-4 pb-5 pt-8 bg-gradient-to-t from-black via-black/90 to-transparent">
+<div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-8 bg-gradient-to-t from-black via-black/90 to-transparent">
   <div className="space-y-2.5 rounded-2xl border border-white/10 bg-black/55 backdrop-blur-md p-2.5">
   {/* Resume Button */}
   {isPausedWorkout && (

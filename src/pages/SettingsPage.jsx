@@ -1191,6 +1191,8 @@ setDraftProgram((prev) => {
             <img
               src={previewSrc}
               alt=""
+              loading="lazy"
+              decoding="async"
               className="h-full w-full object-cover"
             />
           ) : (
