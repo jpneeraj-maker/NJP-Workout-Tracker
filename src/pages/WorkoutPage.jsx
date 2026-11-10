@@ -187,7 +187,7 @@ const repDialValues = useMemo(
 );
 
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col">
       {activeTab === "workout" &&
  !workoutMode &&
  activeWorkoutScreen !== "summary" && (
@@ -259,8 +259,8 @@ const repDialValues = useMemo(
         workoutMode &&
         activeWorkoutScreen === "amrap-active" &&
         amrapDay && (
-          <div className="flex min-h-[calc(100vh-2rem)] flex-col">
-            <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex min-h-0 flex-1 flex-col rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
               <div className="mb-4 relative flex items-center text-sm text-white/70">
                 <button
                   onClick={() => setShowEndWorkoutConfirm(true)}
@@ -360,7 +360,7 @@ const repDialValues = useMemo(
         workoutMode &&
         activeWorkoutScreen === "amrap-partial" &&
         amrapDay && (
-          <div className="flex min-h-[calc(100vh-2rem)] flex-col">
+          <div className="flex min-h-0 flex-1 flex-col">
             <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
               <div className="mb-2 text-center text-2xl font-semibold text-white">
                 Time’s up
@@ -448,8 +448,8 @@ const repDialValues = useMemo(
         )}
 
       {activeTab === "workout" && workoutMode && activeWorkoutScreen === "active" && (
-        <div className="flex min-h-[calc(100vh-2rem)] flex-col">
-          <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
             <div className="mb-4 relative flex items-center justify-left text-sm text-white/70">
               <button
                onClick={() => setShowEndWorkoutConfirm(true)}
@@ -527,14 +527,14 @@ const repDialValues = useMemo(
 
 </div>
       
-            <div className="mb-4 flex h-[220px] items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/40">
+            <div className="mb-4 flex min-h-[140px] flex-1 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/40">
               {activeExerciseImage ? (
                 <img
                   src={activeExerciseImage}
                   alt={activeExercise?.name || "Exercise"}
                   loading="lazy"
                   decoding="async"
-                  className="h-full w-full object-contain"
+                  className="h-full max-h-full w-full object-contain"
                 />
               ) : (
                 <div className="flex h-full items-center justify-center text-sm uppercase tracking-[0.3em] text-white/30">
@@ -746,7 +746,7 @@ const repDialValues = useMemo(
       
           <button
             onClick={() => setShowEndWorkoutConfirm(true)}
-            className="mt-4 rounded-2xl border border-red-500/30 bg-red-600/20 py-3 text-sm font-medium text-red-300"
+            className="mt-3 shrink-0 rounded-2xl border border-red-500/30 bg-red-600/20 py-3 text-sm font-medium text-red-300"
           >
             End Workout
           </button>
@@ -755,8 +755,8 @@ const repDialValues = useMemo(
       {activeTab === "workout" &&
         workoutMode &&
         activeWorkoutScreen === "rest-set" && (
-          <div className="flex min-h-[calc(100vh-2rem)] flex-col">
-            <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex min-h-0 flex-1 flex-col rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
               <div className="mb-4 flex items-center justify-between text-sm text-white/70">
                 <button
                   onClick={() => setWorkoutMode(false)}
@@ -897,8 +897,8 @@ const repDialValues = useMemo(
       {activeTab === "workout" &&
         workoutMode &&
         activeWorkoutScreen === "rest-exercise" && (
-          <div className="flex min-h-[calc(100vh-2rem)] flex-col">
-            <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex min-h-0 flex-1 flex-col rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
               <div className="mb-4 flex items-center justify-between text-sm text-white/70">
                 <button
                   onClick={() => setWorkoutMode(false)}
@@ -1046,7 +1046,7 @@ const repDialValues = useMemo(
       )}
       {activeTab === "workout" &&
         activeWorkoutScreen === "stretch" && (
-          <div className="flex min-h-[calc(100vh-2rem)] flex-col justify-center">
+          <div className="flex min-h-0 flex-1 flex-col justify-center">
             <div className="rounded-3xl border border-sky-400/30 bg-black/50 p-5 backdrop-blur-md">
               <div className="text-[11px] uppercase tracking-[0.28em] text-sky-300/80 mb-2">
                 {stretchOnlyMode ? "Stretch session" : "After workout"}
@@ -1123,7 +1123,7 @@ const repDialValues = useMemo(
 
       {activeTab === "workout" &&
         activeWorkoutScreen === "summary" && (
-          <div className="flex min-h-[calc(100vh-2rem)] flex-col">
+          <div className="flex min-h-0 flex-1 flex-col">
             <div className="rounded-3xl border border-white/10 bg-white/10 p-5 text-center backdrop-blur-md">
               <div className="mb-4 flex justify-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full border border-green-500/40 bg-green-500/10 text-3xl text-green-300">
@@ -1617,6 +1617,6 @@ activeWorkoutScreen === null && (
         </div>
       )}
 
-    </>
+    </div>
   );
 }

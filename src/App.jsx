@@ -1587,7 +1587,7 @@ if (!isDataLoaded)
   }
   console.log("APP WORKOUT HISTORY:", workoutHistory);
   return (
-    <div className="relative min-h-screen text-white app-safe">
+    <div className="relative flex min-h-dvh flex-col text-white app-safe">
       <div
         aria-hidden="true"
         className="pointer-events-none fixed inset-0 z-0 bg-black"
@@ -1601,7 +1601,7 @@ if (!isDataLoaded)
 <div
   className={`
     relative z-10
-    min-h-screen
+    flex flex-1 flex-col
     transition-all duration-250 ease-out
     ${isTransitioning
       ? transitionDirection === "forward"
@@ -1611,7 +1611,7 @@ if (!isDataLoaded)
     }
   `}
 >
-  <div className="max-w-md mx-auto px-4">
+  <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pb-2">
 
 {activeTab === "history" ? (
 <HistoryPage

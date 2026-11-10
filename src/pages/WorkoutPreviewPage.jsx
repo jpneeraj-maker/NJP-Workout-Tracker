@@ -326,7 +326,7 @@ export default function WorkoutPreviewPage(props) {
     )}
 
 {/* EXERCISE CARDS */}
-<div className="space-y-3 pb-36">
+<div className="space-y-3 pb-24">
   {currentDay?.exercises?.map((exercise, i) => {
     const isExpanded = expandedExerciseIndex === i;
     const sets = exercise.sets || [];
@@ -430,8 +430,8 @@ export default function WorkoutPreviewPage(props) {
   })}
 </div>
 
-<div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-8 bg-gradient-to-t from-black via-black/90 to-transparent">
-  <div className="space-y-2.5 rounded-2xl border border-white/10 bg-black/55 backdrop-blur-md p-2.5">
+<div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 bg-gradient-to-t from-black via-black/95 to-transparent">
+  <div className="space-y-2 rounded-2xl border border-white/10 bg-black/55 backdrop-blur-md p-2">
   {/* Resume Button */}
   {isPausedWorkout && (
     <button
