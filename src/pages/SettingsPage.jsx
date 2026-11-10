@@ -1,5 +1,14 @@
 import { useState, useEffect, useRef } from "react";
-import { Trash2, ImagePlus, ArrowLeft, ChevronDown, Undo2 } from "lucide-react";
+import {
+  Trash2,
+  ImagePlus,
+  ArrowLeft,
+  ChevronDown,
+  Undo2,
+  Download,
+  Copy,
+  X,
+} from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { getExerciseImage } from "../exerciseImages";
 import {
@@ -14,6 +23,15 @@ import {
   buildBandDialValues,
   normalizeBandLabel,
 } from "../loggingModes";
+import {
+  buildExerciseCatalog,
+  buildExportFilename,
+  copyTextToClipboard,
+  downloadTextFile,
+  formatExerciseCatalogText,
+  formatProgramAsText,
+} from "../programTextExport";
+import { useFittingInputFont } from "../components/FittingText";
 
 const LOGGING_MODES = [
   { id: "load", label: "Load", loadLabel: "Weight", valueLabel: "Reps", showLoad: true },
@@ -228,7 +246,13 @@ function buildSettingsRepDialValues(loggingMode, sets = []) {
 
 function EditorSection({ title, summary, open, onToggle, children }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-black/25 overflow-hidden">
+    <div
+      className={`rounded-xl border bg-black/35 overflow-hidden transition-colors ${
+        open
+          ? "border-stone-400/50 shadow-[0_0_0_1px_rgba(168,162,158,0.12)]"
+          : "border-white/25"
+      }`}
+    >
       <button
         type="button"
         onClick={onToggle}
@@ -236,21 +260,25 @@ function EditorSection({ title, summary, open, onToggle, children }) {
         className="w-full flex items-center gap-2 px-3 py-2.5 text-left active:scale-[0.99] transition"
       >
         <div className="min-w-0 flex-1">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-white/40">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-stone-300/80">
             {title}
           </div>
           {!open && summary ? (
-            <div className="mt-0.5 text-xs text-white/55 truncate">{summary}</div>
+            <div className="mt-0.5 text-xs text-white/65 break-words">
+              {summary}
+            </div>
           ) : null}
         </div>
         <ChevronDown
           size={16}
-          className={`shrink-0 text-white/45 transition-transform ${
+          className={`shrink-0 text-stone-400/80 transition-transform ${
             open ? "rotate-180" : ""
           }`}
         />
       </button>
-      {open ? <div className="border-t border-white/5 px-3 py-3">{children}</div> : null}
+      {open ? (
+        <div className="border-t border-stone-400/25 px-3 py-3">{children}</div>
+      ) : null}
     </div>
   );
 }
@@ -259,6 +287,14 @@ export default function SettingsPage(props) {
   const [isInitialized, setIsInitialized] = useState(false);
   const [uploadingImageKey, setUploadingImageKey] = useState(null);
   const [routineMenuOpen, setRoutineMenuOpen] = useState(false);
+  const [showProgramExport, setShowProgramExport] = useState(false);
+  const [exportScope, setExportScope] = useState("all-routines");
+  const [exportRoutineIndexes, setExportRoutineIndexes] = useState([]);
+  const [exportDayRoutineIndex, setExportDayRoutineIndex] = useState(0);
+  const [exportDayIndexes, setExportDayIndexes] = useState([]);
+  const [exportCatalogRoutineIndex, setExportCatalogRoutineIndex] = useState(0);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportNotice, setExportNotice] = useState("");
   const imageInputRef = useRef(null);
   const pendingImageTargetRef = useRef(null);
   const routineMenuRef = useRef(null);
@@ -532,6 +568,156 @@ const selectedRoutineData =
   routinesArray[activeRoutineIndex] || null;
 const selectedRoutineName =
   selectedRoutineData?.name || `Routine ${activeRoutineIndex + 1}`;
+const routineNameInputRef = useFittingInputFont(
+  selectedRoutineData?.name ?? "",
+  { maxSize: 14, minSize: 11 }
+);
+
+function openProgramExport() {
+  const allIndexes = routinesArray.map((_, i) => i);
+  setExportScope("all-routines");
+  setExportRoutineIndexes(allIndexes);
+  setExportDayRoutineIndex(activeRoutineIndex);
+  setExportDayIndexes(
+    (routinesArray[activeRoutineIndex]?.days || []).map((_, i) => i)
+  );
+  setExportCatalogRoutineIndex(activeRoutineIndex);
+  setExportNotice("");
+  setShowProgramExport(true);
+}
+
+function toggleExportRoutine(index) {
+  setExportRoutineIndexes((prev) =>
+    prev.includes(index)
+      ? prev.filter((i) => i !== index)
+      : [...prev, index].sort((a, b) => a - b)
+  );
+}
+
+function toggleExportDay(index) {
+  setExportDayIndexes((prev) =>
+    prev.includes(index)
+      ? prev.filter((i) => i !== index)
+      : [...prev, index].sort((a, b) => a - b)
+  );
+}
+
+const exportDayRoutine = routinesArray[exportDayRoutineIndex] || null;
+
+function buildProgramExportPayload() {
+  const routines = routinesArray;
+
+  if (exportScope === "all-routines") {
+    return {
+      text: formatProgramAsText(routines, {
+        title: "All routines",
+      }),
+      filename: buildExportFilename("all-routines"),
+    };
+  }
+
+  if (exportScope === "selected-routines") {
+    const indexes = exportRoutineIndexes.filter(
+      (i) => i >= 0 && i < routines.length
+    );
+    if (!indexes.length) {
+      throw new Error("Select at least one routine.");
+    }
+    const label =
+      indexes.length === 1
+        ? routines[indexes[0]]?.name || "routine"
+        : `${indexes.length}-routines`;
+    return {
+      text: formatProgramAsText(routines, {
+        routineIndexes: indexes,
+        title: "Selected routines",
+      }),
+      filename: buildExportFilename(label),
+    };
+  }
+
+  if (exportScope === "routine-days") {
+    const rIndex = exportDayRoutineIndex;
+    if (!routines[rIndex]) {
+      throw new Error("Pick a routine.");
+    }
+    const days = exportDayIndexes.filter(
+      (i) => i >= 0 && i < (routines[rIndex].days || []).length
+    );
+    if (!days.length) {
+      throw new Error("Select at least one day.");
+    }
+    const routineName = routines[rIndex]?.name || `routine-${rIndex + 1}`;
+    const dayLabel =
+      days.length === (routines[rIndex].days || []).length
+        ? "all-days"
+        : days
+            .map((i) => routines[rIndex].days[i]?.name || `day-${i + 1}`)
+            .join("-");
+    return {
+      text: formatProgramAsText(routines, {
+        routineIndexes: [rIndex],
+        dayIndexesByRoutine: { [rIndex]: days },
+        title: `${routineName} — selected days`,
+      }),
+      filename: buildExportFilename(`${routineName}-${dayLabel}`),
+    };
+  }
+
+  if (exportScope === "catalog-all") {
+    const catalog = buildExerciseCatalog(routines);
+    return {
+      text: formatExerciseCatalogText(catalog, "Exercise catalog (all)"),
+      filename: buildExportFilename("exercise-catalog"),
+    };
+  }
+
+  if (exportScope === "catalog-routine") {
+    const rIndex = exportCatalogRoutineIndex;
+    if (!routines[rIndex]) {
+      throw new Error("Pick a routine.");
+    }
+    const routineName = routines[rIndex]?.name || `routine-${rIndex + 1}`;
+    const catalog = buildExerciseCatalog(routines, [rIndex]);
+    return {
+      text: formatExerciseCatalogText(
+        catalog,
+        `Exercise catalog — ${routineName}`
+      ),
+      filename: buildExportFilename(`${routineName}-exercises`),
+    };
+  }
+
+  throw new Error("Unknown export scope.");
+}
+
+async function handleProgramDownload() {
+  setExportBusy(true);
+  setExportNotice("");
+  try {
+    const { text, filename } = buildProgramExportPayload();
+    downloadTextFile(text, filename);
+    setExportNotice("Downloaded.");
+  } catch (err) {
+    setExportNotice(err?.message || "Download failed.");
+  } finally {
+    setExportBusy(false);
+  }
+}
+
+async function handleProgramCopy() {
+  setExportBusy(true);
+  setExportNotice("");
+  try {
+    const { text } = buildProgramExportPayload();
+    await copyTextToClipboard(text);
+    setExportNotice("Copied to clipboard.");
+  } catch (err) {
+    setExportNotice(err?.message || "Copy failed.");
+  } finally {
+    setExportBusy(false);
+  }
+}
 
 function addRoutine() {
   const copy = confirm("Copy last routine?");
@@ -785,7 +971,7 @@ return (
     className="hidden"
     onChange={handleExerciseImageSelected}
   />
-<div className="pt-5 mb-3 grid grid-cols-[auto_1fr_auto_auto] items-center gap-2">
+<div className="mb-3 grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 pt-3 sm:gap-2">
   {/* LEFT — Back */}
   <button
     onClick={() => {
@@ -795,20 +981,21 @@ return (
         props.setActiveScreen("landing");
       }
     }}
-    className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-black/60 backdrop-blur-md text-white text-base border border-white/10 hover:bg-black/70 active:scale-[0.97] transition"
+    className="inline-flex items-center gap-2 px-3 py-2 rounded-2xl bg-black/60 backdrop-blur-md text-stone-200 text-base border border-stone-400/40 hover:bg-black/70 active:scale-[0.97] transition"
   >
     <ArrowLeft size={10} />
   </button>
 
   {/* CENTER — Selected routine dropdown */}
   <div className="relative min-w-0" ref={routineMenuRef}>
-    <div className="w-full inline-flex items-center gap-2 pl-2.5 pr-2 py-1.5 rounded-xl text-sm text-white/90 border border-white/15 bg-black/30">
-      <span className="h-7 w-[3px] shrink-0 rounded-full bg-[#c7a86a]/80" />
+    <div className="inline-flex w-full min-w-0 items-center gap-2 rounded-xl border border-stone-400/30 bg-black/30 py-1.5 pl-2.5 pr-2 text-sm text-white/90">
+      <span className="h-7 w-[3px] shrink-0 rounded-full bg-stone-400/80" />
       <span className="min-w-0 flex-1">
-        <span className="block text-[10px] uppercase tracking-[0.14em] text-white/40 leading-none mb-0.5">
+        <span className="mb-0.5 block text-[10px] uppercase leading-none tracking-[0.14em] text-stone-400/80">
           Routine
         </span>
         <input
+          ref={routineNameInputRef}
           value={selectedRoutineData?.name ?? ""}
           onChange={(e) => {
             const value = e.target.value;
@@ -832,7 +1019,7 @@ return (
             }
           }}
           onClick={(e) => e.stopPropagation()}
-          className="block w-full truncate bg-transparent font-semibold text-[#f0e6d0] outline-none"
+          className="block w-full bg-transparent font-semibold text-[#f0e6d0] outline-none"
         />
       </span>
       <button
@@ -878,16 +1065,16 @@ return (
                   }}
                   className={`w-full px-3 py-2.5 text-left text-sm transition ${
                     isSelected
-                      ? "bg-[#c7a86a]/20 text-[#d7c7a4]"
+                      ? "bg-stone-400/15 text-stone-200"
                       : "text-white/85 hover:bg-white/5"
                   }`}
                 >
                   <span className="flex items-center justify-between gap-2">
-                    <span className="truncate">
+                    <span className="min-w-0 break-words">
                       {routine.name || `Routine ${index + 1}`}
                     </span>
                     {isSelected && (
-                      <span className="shrink-0 text-[#c7a86a]">✓</span>
+                      <span className="shrink-0 text-stone-300">✓</span>
                     )}
                   </span>
                 </button>
@@ -900,7 +1087,7 @@ return (
           <button
             type="button"
             onClick={addRoutine}
-            className="w-full px-3 py-2.5 text-left text-sm text-[#d7c7a4] hover:bg-white/5 active:scale-[0.99] transition"
+            className="w-full px-3 py-2.5 text-left text-sm text-stone-300 hover:bg-white/5 active:scale-[0.99] transition"
           >
             + Add routine
           </button>
@@ -917,7 +1104,7 @@ return (
     title="Undo last change across the whole program"
     className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-2xl backdrop-blur-md border transition active:scale-[0.97] ${
       canUndo
-        ? "bg-black/60 text-[#d7c7a4] border-[#c7a86a55] hover:bg-black/70"
+        ? "bg-black/60 text-stone-200 border-stone-400/45 hover:bg-black/70"
         : "bg-black/40 text-white/25 border-white/10 cursor-not-allowed"
     }`}
   >
@@ -956,8 +1143,8 @@ return (
       className={`group rounded-3xl border transition-all duration-300 overflow-hidden cursor-pointer active:scale-[0.992]
   ${
     expandedDayIndex === dayIndex
-      ? "border-[#c7a86a66] bg-black/40 backdrop-blur-md shadow-[0_0_28px_rgba(199,168,106,0.28)]"
-      : "border-white/10 bg-black/40 backdrop-blur-md shadow-[0_0_12px_rgba(0,0,0,0.25)] hover:border-[#c7a86a40]"
+      ? "border-stone-400/50 bg-black/40 backdrop-blur-md shadow-[0_0_28px_rgba(168,162,158,0.18)]"
+      : "border-white/10 bg-black/40 backdrop-blur-md shadow-[0_0_12px_rgba(0,0,0,0.25)] hover:border-stone-400/30"
   }`}
         onClick={() =>
           setExpandedDayIndex(
@@ -968,7 +1155,7 @@ return (
         <div className="flex items-center gap-3 px-5 py-5">
 <div className="flex items-center gap-4 flex-1">
 
-  <div className="w-7 h-7 shrink-0 flex items-center justify-center rounded-full border border-[#c7a86a40] text-[11px] font-semibold text-[#d7c7a4]/70">
+  <div className="w-7 h-7 shrink-0 flex items-center justify-center rounded-full border border-stone-400/40 text-[11px] font-semibold text-stone-300/80">
     {String(dayIndex + 1).padStart(2, "0")}
   </div>
 
@@ -1466,7 +1653,7 @@ setDraftProgram((prev) => {
       open={isEditorSectionOpen(exerciseKey, "mode")}
       onToggle={() => toggleEditorSection(exerciseKey, "mode")}
     >
-      <div className="flex gap-1 rounded-xl border border-white/10 bg-black/30 p-1">
+      <div className="flex gap-1 rounded-xl border border-white/20 bg-black/40 p-1">
         {LOGGING_MODES.map((mode) => {
           const selected = loggingMode === mode.id;
           return (
@@ -1482,7 +1669,7 @@ setDraftProgram((prev) => {
               className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-medium transition active:scale-[0.98] ${
                 selected
                   ? "bg-[#c7a86a] text-black shadow-[0_0_12px_rgba(199,168,106,0.35)]"
-                  : "text-white/60 hover:bg-white/5 hover:text-white/85"
+                  : "text-white/70 hover:bg-white/5 hover:text-white/90"
               }`}
             >
               {mode.label}
@@ -1492,8 +1679,8 @@ setDraftProgram((prev) => {
       </div>
     </EditorSection>
 
-    <div className="rounded-xl border border-white/10 bg-black/25 px-3 py-3 space-y-2.5">
-      <div className="text-[10px] uppercase tracking-[0.14em] text-white/40">
+    <div className="rounded-xl border border-[#c7a86a66] bg-black/35 px-3 py-3 space-y-2.5 shadow-[0_0_0_1px_rgba(199,168,106,0.12)]">
+      <div className="text-[10px] uppercase tracking-[0.14em] text-[#d7c7a4]/80">
         Sets
       </div>
 
@@ -1501,7 +1688,7 @@ setDraftProgram((prev) => {
         {sets.map((set, setIndex) => (
           <div
             key={setIndex}
-            className="rounded-xl border border-white/5 bg-black/30 px-2.5 py-2"
+            className="rounded-xl border border-white/20 bg-black/40 px-2.5 py-2"
           >
             <div className="mb-2 flex items-center justify-between gap-2">
               <div className="h-7 w-7 rounded-full border border-[#c7a86a40] bg-[#c7a86a12] flex items-center justify-center text-xs font-semibold text-[#d7c7a4]">
@@ -1533,7 +1720,7 @@ setDraftProgram((prev) => {
               }`}
             >
               {loggingMode === "bodyweight" ? (
-                <div className="flex h-11 items-center justify-center rounded-xl border border-white/10 bg-black/40 text-xl font-semibold text-white">
+                <div className="flex h-[108px] items-center justify-center rounded-xl border border-white/25 bg-black/50 text-xl font-semibold text-white">
                   BW
                 </div>
               ) : modeMeta.showLoad ? (
@@ -1553,7 +1740,7 @@ setDraftProgram((prev) => {
                           : next;
                     });
                   }}
-                  className="rounded-xl border border-white/10 bg-black/40"
+                  className="rounded-xl border border-white/25 bg-black/50"
                 />
               ) : null}
 
@@ -1566,7 +1753,7 @@ setDraftProgram((prev) => {
                     ex.sets[setIndex].reps = next;
                   });
                 }}
-                className="rounded-xl border border-white/10 bg-black/40"
+                className="rounded-xl border border-white/25 bg-black/50"
               />
             </div>
           </div>
@@ -1582,7 +1769,7 @@ setDraftProgram((prev) => {
               ex.sets.push(createEmptySet(loggingMode));
             });
           }}
-          className="flex-1 rounded-xl border border-[#c7a86a33] bg-[#c7a86a12] py-2 text-xs text-[#d7c7a4] hover:bg-[#c7a86a]/15 transition-all duration-200 active:scale-[0.98]"
+          className="flex-1 rounded-xl border border-[#c7a86a66] bg-[#c7a86a12] py-2 text-xs text-[#d7c7a4] hover:bg-[#c7a86a]/15 transition-all duration-200 active:scale-[0.98]"
         >
           + Add Set
         </button>
@@ -1596,7 +1783,7 @@ setDraftProgram((prev) => {
               ex.sets = list;
             });
           }}
-          className="flex-1 rounded-xl border border-white/10 bg-black/40 py-2 text-xs text-white/75 hover:bg-white/5 transition-all duration-200 active:scale-[0.98]"
+          className="flex-1 rounded-xl border border-white/25 bg-black/40 py-2 text-xs text-white/80 hover:bg-white/5 transition-all duration-200 active:scale-[0.98]"
         >
           Duplicate Last
         </button>
@@ -1671,7 +1858,16 @@ setDraftProgram((prev) => {
 
       <div className="mt-6 mb-4 rounded-3xl border border-white/10 bg-black/55 backdrop-blur-md p-4">
 
-        <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={openProgramExport}
+          className="mb-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-stone-400/40 bg-stone-500/10 px-4 py-3 text-sm font-medium text-stone-100 transition-all duration-200 active:scale-[0.98]"
+        >
+          <Download size={16} />
+          Download program (.txt)
+        </button>
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
           <button
             onClick={() => {
               const backupData = {
@@ -1706,7 +1902,7 @@ setDraftProgram((prev) => {
 
               URL.revokeObjectURL(url);
             }}
-            className="flex-1 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm font-medium text-white transition-all duration-200 active:scale-[0.98]"
+            className="rounded-2xl border border-stone-400/35 bg-stone-500/10 p-3 text-sm font-medium text-stone-100 transition-all duration-200 active:scale-[0.98]"
           >
             Export Backup
           </button>
@@ -1717,15 +1913,15 @@ setDraftProgram((prev) => {
                 .getElementById("backup-import-input")
                 ?.click();
             }}
-            className="flex-1 rounded-2xl border border-blue-500/30 bg-blue-600/20 p-4 text-sm font-medium text-blue-300 transition-all duration-200 active:scale-[0.98]"
+            className="rounded-2xl border border-blue-500/30 bg-blue-600/20 p-3 text-sm font-medium text-blue-300 transition-all duration-200 active:scale-[0.98]"
           >
             Import Backup
           </button>
           <button
-         onClick={handleUploadToCloud}
-         className="flex-1 rounded-2xl bg-green-600/80 hover:bg-green-500 p-4 text-sm font-medium text-white transition-all duration-200 active:scale-[0.98]"
-         >
-          Cloud Upload
+            onClick={handleUploadToCloud}
+            className="rounded-2xl bg-green-600/80 p-3 text-sm font-medium text-white transition-all duration-200 hover:bg-green-500 active:scale-[0.98]"
+          >
+            Cloud Upload
           </button>
         </div>
         
@@ -1818,6 +2014,218 @@ className={`mt-4 w-full rounded-2xl p-3 text-sm font-medium text-white ${
           }}
         />
       </div>
+
+      {showProgramExport ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-8 backdrop-blur-sm sm:items-center">
+          <div className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-3xl border border-stone-400/35 bg-[#0c0c0c] p-4 shadow-2xl shadow-black/60">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <div className="text-lg font-semibold text-white">
+                  Download program
+                </div>
+                <div className="mt-0.5 text-xs text-stone-400">
+                  Readable .txt — not a restore backup
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowProgramExport(false)}
+                className="rounded-lg border border-white/10 p-2 text-white/60 hover:text-white"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="mb-3 space-y-2">
+              {[
+                { id: "all-routines", label: "All routines" },
+                { id: "selected-routines", label: "Selected routines" },
+                { id: "routine-days", label: "Days in a routine" },
+                { id: "catalog-all", label: "All exercises (catalog)" },
+                {
+                  id: "catalog-routine",
+                  label: "Exercises in one routine",
+                },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => {
+                    setExportScope(opt.id);
+                    setExportNotice("");
+                    if (opt.id === "selected-routines" && !exportRoutineIndexes.length) {
+                      setExportRoutineIndexes(routinesArray.map((_, i) => i));
+                    }
+                    if (opt.id === "routine-days") {
+                      setExportDayRoutineIndex(activeRoutineIndex);
+                      setExportDayIndexes(
+                        (routinesArray[activeRoutineIndex]?.days || []).map(
+                          (_, i) => i
+                        )
+                      );
+                    }
+                  }}
+                  className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm transition active:scale-[0.99] ${
+                    exportScope === opt.id
+                      ? "border-stone-400/60 bg-stone-400/15 text-stone-100"
+                      : "border-white/10 bg-black/30 text-white/70 hover:bg-white/5"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {exportScope === "selected-routines" ? (
+              <div className="mb-3 rounded-2xl border border-white/10 bg-black/40 p-3">
+                <div className="mb-2 text-[10px] uppercase tracking-[0.16em] text-stone-400">
+                  Routines
+                </div>
+                <div className="max-h-40 space-y-1.5 overflow-y-auto">
+                  {routinesArray.map((routine, index) => {
+                    const checked = exportRoutineIndexes.includes(index);
+                    return (
+                      <label
+                        key={index}
+                        className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-white/5"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleExportRoutine(index)}
+                          className="accent-stone-300"
+                        />
+                        <span className="min-w-0 break-words text-sm text-white/85">
+                          {routine?.name || `Routine ${index + 1}`}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {exportScope === "routine-days" ? (
+              <div className="mb-3 space-y-3 rounded-2xl border border-white/10 bg-black/40 p-3">
+                <div>
+                  <div className="mb-1.5 text-[10px] uppercase tracking-[0.16em] text-stone-400">
+                    Routine
+                  </div>
+                  <select
+                    value={exportDayRoutineIndex}
+                    onChange={(e) => {
+                      const next = Number(e.target.value);
+                      setExportDayRoutineIndex(next);
+                      setExportDayIndexes(
+                        (routinesArray[next]?.days || []).map((_, i) => i)
+                      );
+                    }}
+                    className="w-full rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-sm text-white"
+                  >
+                    {routinesArray.map((routine, index) => (
+                      <option key={index} value={index}>
+                        {routine?.name || `Routine ${index + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-stone-400">
+                      Days
+                    </div>
+                    <button
+                      type="button"
+                      className="text-[11px] text-stone-300"
+                      onClick={() =>
+                        setExportDayIndexes(
+                          (exportDayRoutine?.days || []).map((_, i) => i)
+                        )
+                      }
+                    >
+                      Select all
+                    </button>
+                  </div>
+                  <div className="max-h-40 space-y-1.5 overflow-y-auto">
+                    {(exportDayRoutine?.days || []).map((day, index) => {
+                      const checked = exportDayIndexes.includes(index);
+                      return (
+                        <label
+                          key={index}
+                          className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-white/5"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleExportDay(index)}
+                            className="accent-stone-300"
+                          />
+                          <span className="min-w-0 break-words text-sm text-white/85">
+                            {day?.name || `Day ${index + 1}`}
+                            <span className="text-white/40">
+                              {" "}
+                              · {day?.exercises?.length || 0} ex
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {exportScope === "catalog-routine" ? (
+              <div className="mb-3 rounded-2xl border border-white/10 bg-black/40 p-3">
+                <div className="mb-1.5 text-[10px] uppercase tracking-[0.16em] text-stone-400">
+                  Routine
+                </div>
+                <select
+                  value={exportCatalogRoutineIndex}
+                  onChange={(e) =>
+                    setExportCatalogRoutineIndex(Number(e.target.value))
+                  }
+                  className="w-full rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-sm text-white"
+                >
+                  {routinesArray.map((routine, index) => (
+                    <option key={index} value={index}>
+                      {routine?.name || `Routine ${index + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+
+            {exportNotice ? (
+              <div className="mb-3 text-center text-xs text-stone-300">
+                {exportNotice}
+              </div>
+            ) : null}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={exportBusy}
+                onClick={handleProgramDownload}
+                className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-stone-400/45 bg-stone-400/15 py-3 text-sm font-medium text-stone-100 active:scale-[0.98] disabled:opacity-50"
+              >
+                <Download size={15} />
+                Download
+              </button>
+              <button
+                type="button"
+                disabled={exportBusy}
+                onClick={handleProgramCopy}
+                className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/5 py-3 text-sm font-medium text-white/85 active:scale-[0.98] disabled:opacity-50"
+              >
+                <Copy size={15} />
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

@@ -18,91 +18,99 @@ export default function LandingPage({
   startStretchOnly,
 }) {
   return (
-    <div
-      className="fixed inset-0 flex items-end justify-center pb-[max(1rem,env(safe-area-inset-bottom))]"
-      style={{
-        backgroundImage: `url(${landingBg})`,
-        backgroundSize: "cover",
-        backgroundPosition: "center 28%",
-        backgroundRepeat: "no-repeat",
-      }}
-    >
-      <div className="flex items-center gap-5 animate-[fadeIn_0.7s_ease_forwards]">
-        <button
-          type="button"
-          aria-label="History"
-          title="History"
-          onClick={() => {
-            window.history.pushState({ screen: "app" }, "");
-            setActiveTab("history");
-            setActiveScreen("app");
+    <div className="fixed inset-0 flex flex-col bg-black">
+      {/* Art lives only above the button row — full figure + brand, no overlap */}
+      <div className="relative min-h-0 flex-1">
+        <div
+          aria-hidden="true"
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `url(${landingBg})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center top",
+            backgroundRepeat: "no-repeat",
           }}
-          className={`${baseBtn} w-9 h-9 border-violet-400/45 text-[#d7c7a4]`}
-        >
-          <History {...iconProps} />
-        </button>
+        />
+      </div>
 
-        <button
-          type="button"
-          aria-label="Stretch"
-          title="Stretch"
-          onClick={() => {
-            window.history.pushState({ screen: "app" }, "");
-            if (typeof startStretchOnly === "function") {
-              startStretchOnly();
-            }
-          }}
-          className={`${baseBtn} w-9 h-9 border-sky-400/50 text-[#d7c7a4]`}
-        >
-          <PersonStanding {...iconProps} />
-        </button>
+      <div className="relative z-10 shrink-0 bg-black/80 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-[2px]">
+        <div className="mx-auto flex w-full max-w-sm items-center justify-between px-6 animate-[fadeIn_0.7s_ease_forwards]">
+          <button
+            type="button"
+            aria-label="History"
+            title="History"
+            onClick={() => {
+              window.history.pushState({ screen: "app" }, "");
+              setActiveTab("history");
+              setActiveScreen("app");
+            }}
+            className={`${baseBtn} h-11 w-11 border-violet-400/45 text-[#d7c7a4]`}
+          >
+            <History {...iconProps} />
+          </button>
 
-        <button
-          type="button"
-          aria-label="Workout"
-          title="Workout"
-          onClick={() => {
-            window.history.pushState({ screen: "app" }, "");
-            setActiveTab("workout");
-            setActiveScreen("app");
-          }}
-          className={`${baseBtn} w-12 h-12 rounded-xl border-2 border-[#c7a86a] text-[#d7c7a4]`}
-        >
-          <Dumbbell size={22} strokeWidth={1.75} />
-        </button>
+          <button
+            type="button"
+            aria-label="Stretch"
+            title="Stretch"
+            onClick={() => {
+              window.history.pushState({ screen: "app" }, "");
+              if (typeof startStretchOnly === "function") {
+                startStretchOnly();
+              }
+            }}
+            className={`${baseBtn} h-11 w-11 border-sky-400/50 text-[#d7c7a4]`}
+          >
+            <PersonStanding {...iconProps} />
+          </button>
 
-        <button
-          type="button"
-          aria-label="Analytics"
-          title="Analytics"
-          onClick={() => {
-            window.history.pushState({ screen: "app" }, "");
-            setActiveTab("analytics");
-            setActiveScreen("app");
-          }}
-          className={`${baseBtn} w-9 h-9 border-emerald-400/45 text-[#d7c7a4]`}
-        >
-          <ChartNoAxesCombined {...iconProps} />
-        </button>
+          <button
+            type="button"
+            aria-label="Workout"
+            title="Workout"
+            onClick={() => {
+              window.history.pushState({ screen: "app" }, "");
+              setActiveTab("workout");
+              setActiveScreen("app");
+            }}
+            className={`${baseBtn} h-14 w-14 rounded-xl border-2 border-[#c7a86a] text-[#d7c7a4]`}
+          >
+            <Dumbbell size={24} strokeWidth={1.75} />
+          </button>
 
-        <button
-          type="button"
-          aria-label="Settings"
-          title="Settings"
-          onClick={() => {
-            window.history.pushState({ screen: "app" }, "");
+          <button
+            type="button"
+            aria-label="Analytics"
+            title="Analytics"
+            onClick={() => {
+              window.history.pushState({ screen: "app" }, "");
+              setActiveTab("analytics");
+              setActiveScreen("app");
+            }}
+            className={`${baseBtn} h-11 w-11 border-emerald-400/45 text-[#d7c7a4]`}
+          >
+            <ChartNoAxesCombined {...iconProps} />
+          </button>
 
-            if (setSettingsSource) {
-              setSettingsSource("landing");
-            }
+          <button
+            type="button"
+            aria-label="Settings"
+            title="Settings"
+            onClick={() => {
+              window.history.pushState({ screen: "app" }, "");
 
-            setActiveTab("settings");
-            setActiveScreen("app");
-          }}
-          className={`${baseBtn} w-9 h-9 border-stone-400/40 text-[#d7c7a4]`}
-        >
-          <Settings {...iconProps} />
-        </button>
+              if (setSettingsSource) {
+                setSettingsSource("landing");
+              }
+
+              setActiveTab("settings");
+              setActiveScreen("app");
+            }}
+            className={`${baseBtn} h-11 w-11 border-stone-400/40 text-[#d7c7a4]`}
+          >
+            <Settings {...iconProps} />
+          </button>
+        </div>
       </div>
     </div>
   );

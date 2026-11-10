@@ -25,7 +25,11 @@ import {
   inferLoggingMode,
   normalizeBandLabel,
 } from "../loggingModes";
-import { getAmrapDurationMinutes, isAmrapDay } from "../schema";
+import {
+  formatHistorySessionTitle,
+  getAmrapDurationMinutes,
+  isAmrapDay,
+} from "../schema";
 
 import { CSS } from "@dnd-kit/utilities";
 function SortableExerciseCard({ id, children }) {
@@ -208,7 +212,10 @@ const repDialValues = useMemo(
           </div>
       
           <div className="text-lg font-semibold text-[#f5e7c8]">
-            {workoutHistory[0].day}
+            {formatHistorySessionTitle(
+              workoutHistory[0],
+              data?.routines
+            )}
           </div>
         </>
       ) : (
@@ -643,7 +650,7 @@ const repDialValues = useMemo(
                       }`}
                     >
                       {isBodyweight ? (
-                        <div className="flex h-11 items-center justify-center rounded-xl border border-white/10 bg-black/40 text-xl font-semibold text-white">
+                        <div className="flex h-[108px] items-center justify-center rounded-xl border border-white/10 bg-black/40 text-xl font-semibold text-white">
                           BW
                         </div>
                       ) : showLoadDial ? (

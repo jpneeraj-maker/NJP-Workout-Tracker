@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 
-const ITEM_HEIGHT = 44;
-const VISIBLE_ITEMS = 1;
+const ITEM_HEIGHT = 36;
+const VISIBLE_ITEMS = 3;
+const SETTLE_MS = 90;
 
 function nearestIndex(values, value) {
   const raw = String(value ?? "").trim();
+  if (!raw && values.includes("")) {
+    return values.findIndex((v) => String(v) === "");
+  }
   if (!raw) return 0;
 
   const exact = values.findIndex((v) => String(v) === raw);
@@ -25,6 +29,11 @@ function nearestIndex(values, value) {
   return best;
 }
 
+function clampIndex(index, length) {
+  if (length <= 0) return 0;
+  return Math.min(length - 1, Math.max(0, index));
+}
+
 export default function WheelDial({
   values,
   value,
@@ -34,7 +43,9 @@ export default function WheelDial({
 }) {
   const scrollerRef = useRef(null);
   const frameRef = useRef(0);
+  const settleTimerRef = useRef(0);
   const settlingRef = useRef(false);
+  const draggingRef = useRef(false);
   const lastEmittedRef = useRef(null);
   const [selectedIndex, setSelectedIndex] = useState(() =>
     nearestIndex(values, value)
@@ -42,6 +53,17 @@ export default function WheelDial({
 
   const pad = Math.floor(VISIBLE_ITEMS / 2);
   const height = ITEM_HEIGHT * VISIBLE_ITEMS;
+
+  const scrollToIndex = (index, behavior = "auto") => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const top = clampIndex(index, values.length) * ITEM_HEIGHT;
+    if (behavior === "smooth") {
+      scroller.scrollTo({ top, behavior: "smooth" });
+    } else {
+      scroller.scrollTop = top;
+    }
+  };
 
   useEffect(() => {
     const index = nearestIndex(values, value);
@@ -52,19 +74,19 @@ export default function WheelDial({
     if (!scroller) return;
 
     const top = index * ITEM_HEIGHT;
-    const alreadyThere = Math.abs(scroller.scrollTop - top) <= 1;
+    const alreadyThere = Math.abs(scroller.scrollTop - top) <= 1.5;
 
     if (alreadyThere) {
       lastEmittedRef.current = next;
       return;
     }
 
-    // Don't fight the user's active scroll for values we just emitted.
-    if (next === lastEmittedRef.current) return;
+    // Don't fight an in-progress user gesture for a value we just emitted.
+    if (draggingRef.current || next === lastEmittedRef.current) return;
 
     lastEmittedRef.current = next;
     settlingRef.current = true;
-    scroller.scrollTop = top;
+    scrollToIndex(index, "auto");
     requestAnimationFrame(() => {
       settlingRef.current = false;
     });
@@ -73,87 +95,150 @@ export default function WheelDial({
   useEffect(() => {
     return () => {
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
+      if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
     };
   }, []);
 
-  const syncFromScroll = (shouldEmit) => {
+  const readIndex = () => {
     const scroller = scrollerRef.current;
-    if (!scroller || settlingRef.current) return;
-
-    const index = Math.min(
-      values.length - 1,
-      Math.max(0, Math.round(scroller.scrollTop / ITEM_HEIGHT))
+    if (!scroller) return 0;
+    return clampIndex(
+      Math.round(scroller.scrollTop / ITEM_HEIGHT),
+      values.length
     );
+  };
 
-    setSelectedIndex(index);
-
-    if (!shouldEmit) return;
-
+  const emitIndex = (index) => {
     const next = String(values[index] ?? "");
     if (next === lastEmittedRef.current) return;
     lastEmittedRef.current = next;
     onChange?.(next);
   };
 
-  const handleScroll = () => {
-    if (frameRef.current) cancelAnimationFrame(frameRef.current);
-    frameRef.current = requestAnimationFrame(() => syncFromScroll(true));
-  };
-
-  const handleScrollEnd = () => {
+  const settleToNearest = () => {
     const scroller = scrollerRef.current;
     if (!scroller || settlingRef.current) return;
 
-    const index = Math.min(
-      values.length - 1,
-      Math.max(0, Math.round(scroller.scrollTop / ITEM_HEIGHT))
-    );
+    const index = readIndex();
     const top = index * ITEM_HEIGHT;
-    if (Math.abs(scroller.scrollTop - top) > 0.5) {
+    setSelectedIndex(index);
+
+    if (Math.abs(scroller.scrollTop - top) > 0.75) {
+      settlingRef.current = true;
       scroller.scrollTo({ top, behavior: "smooth" });
+      window.setTimeout(() => {
+        settlingRef.current = false;
+        emitIndex(index);
+      }, 140);
+      return;
     }
-    syncFromScroll(true);
+
+    emitIndex(index);
+  };
+
+  const syncFromScroll = () => {
+    if (settlingRef.current) return;
+    const index = readIndex();
+    setSelectedIndex(index);
+  };
+
+  const handleScroll = () => {
+    if (frameRef.current) cancelAnimationFrame(frameRef.current);
+    frameRef.current = requestAnimationFrame(syncFromScroll);
+
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = window.setTimeout(() => {
+      if (draggingRef.current) return;
+      settleToNearest();
+    }, SETTLE_MS);
+  };
+
+  const handleGestureStart = () => {
+    draggingRef.current = true;
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+  };
+
+  const handleGestureEnd = () => {
+    draggingRef.current = false;
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = window.setTimeout(() => {
+      settleToNearest();
+    }, SETTLE_MS);
   };
 
   return (
     <div className={`relative select-none ${className}`}>
       <div
+        className="pointer-events-none absolute inset-x-1 top-1/2 z-[2] h-9 -translate-y-1/2 rounded-lg border border-white/10 bg-white/[0.06]"
+      />
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-[3] h-5 bg-gradient-to-b from-black/70 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[3] h-5 bg-gradient-to-t from-black/70 to-transparent" />
+
+      <div
         ref={scrollerRef}
         onScroll={handleScroll}
-        onTouchEnd={handleScrollEnd}
-        onMouseUp={handleScrollEnd}
+        onTouchStart={handleGestureStart}
+        onTouchEnd={handleGestureEnd}
+        onTouchCancel={handleGestureEnd}
+        onMouseDown={handleGestureStart}
+        onMouseUp={handleGestureEnd}
+        onMouseLeave={() => {
+          if (!draggingRef.current) return;
+          handleGestureEnd();
+        }}
+        onWheel={() => {
+          draggingRef.current = true;
+          if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+          settleTimerRef.current = window.setTimeout(() => {
+            draggingRef.current = false;
+            settleToNearest();
+          }, SETTLE_MS + 40);
+        }}
         className="no-scrollbar relative z-[1] overflow-y-auto overscroll-contain"
         style={{
           height,
-          scrollSnapType: "y mandatory",
+          scrollSnapType: "y proximity",
           WebkitOverflowScrolling: "touch",
+          touchAction: "pan-y",
         }}
       >
-        {pad > 0 ? (
-          <div aria-hidden style={{ height: pad * ITEM_HEIGHT }} />
-        ) : null}
+        <div aria-hidden style={{ height: pad * ITEM_HEIGHT }} />
         {values.map((option, index) => {
-          const selected = index === selectedIndex;
+          const distance = Math.abs(index - selectedIndex);
+          const selected = distance === 0;
+          const nearby = distance === 1;
+          const label = option === "" ? "—" : option;
+
           return (
             <div
               key={`${option}-${index}`}
-              className={`flex items-center justify-center text-center transition-colors ${
-                selected
-                  ? "text-xl font-semibold text-white"
-                  : "text-base text-white/35"
-              }`}
+              className="flex items-center justify-center text-center"
               style={{
                 height: ITEM_HEIGHT,
                 scrollSnapAlign: "center",
+                scrollSnapStop: "normal",
+                opacity: selected ? 1 : nearby ? 0.48 : 0.22,
+                transform: selected
+                  ? "scale(1)"
+                  : nearby
+                    ? "scale(0.92)"
+                    : "scale(0.84)",
+                transition:
+                  "opacity 120ms ease-out, transform 120ms ease-out, color 120ms ease-out",
+                color: selected
+                  ? "rgba(255,255,255,1)"
+                  : nearby
+                    ? "rgba(255,255,255,0.55)"
+                    : "rgba(255,255,255,0.28)",
+                fontSize: selected ? "1.15rem" : nearby ? "0.95rem" : "0.85rem",
+                fontWeight: selected ? 600 : 500,
               }}
             >
-              {option}
+              {label}
             </div>
           );
         })}
-        {pad > 0 ? (
-          <div aria-hidden style={{ height: pad * ITEM_HEIGHT }} />
-        ) : null}
+        <div aria-hidden style={{ height: pad * ITEM_HEIGHT }} />
       </div>
 
       {unit ? (

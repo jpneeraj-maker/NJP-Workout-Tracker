@@ -35,6 +35,12 @@ export function isAmrapDay(day) {
   return String(day?.mode || "").toLowerCase() === "amrap";
 }
 
+/** Local calendar YYYY-MM-DD (avoid UTC shift from toISOString). */
+export function getLocalSaveKey(date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export function getAmrapDurationMinutes(day) {
   const mins = Number(day?.amrapDurationMinutes);
   return Number.isFinite(mins) && mins > 0 ? mins : 20;
@@ -75,6 +81,65 @@ export function createWorkoutEntry({
 
     exercises: []
   };
+}
+
+/** Manual / history log entry for an AMRAP day. */
+export function createAmrapHistoryEntry({
+  date,
+  routineName = "",
+  day,
+} = {}) {
+  const circuit = (day?.exercises || []).map((exercise) => ({
+    name: exercise.name,
+    plannedWeight:
+      exercise.sets?.[0]?.plannedWeight ?? exercise.sets?.[0]?.weight ?? "",
+    targetReps:
+      exercise.sets?.[0]?.targetReps ?? exercise.sets?.[0]?.reps ?? "",
+  }));
+
+  return {
+    id: crypto.randomUUID(),
+
+    saveKey: date,
+    date,
+
+    type: "amrap",
+
+    routineName,
+    workoutType: day?.name || "",
+    day: day?.name || "",
+
+    duration: "",
+    durationSeconds: 0,
+    durationMinutes: getAmrapDurationMinutes(day),
+
+    circuitsCompleted: 0,
+
+    circuit,
+    partialCircuit: [],
+
+    exercises: [],
+
+    createdAt: Date.now(),
+  };
+}
+
+export function sanitizeAmrapPartials(partialCircuit = []) {
+  return (partialCircuit || [])
+    .map((entry) => ({
+      name: entry.name,
+      plannedWeight: entry.plannedWeight || "",
+      targetReps: entry.targetReps || "",
+      actualWeight: entry.actualWeight || "",
+      actualReps: entry.actualReps || "",
+    }))
+    .filter(
+      (entry) =>
+        (entry.actualReps &&
+          entry.actualReps !== "" &&
+          entry.actualReps !== "0") ||
+        (entry.actualWeight && entry.actualWeight !== "")
+    );
 }
 
 export function createRestEntry(date) {
@@ -192,6 +257,35 @@ export function isRestEntry(entry) {
 
 export function isSessionEntry(entry) {
   return Boolean(entry) && !isStretchEntry(entry) && !isRestEntry(entry);
+}
+
+/** Resolve routine display name from history entry (+ live routines for older saves). */
+export function getHistoryRoutineName(entry, routines) {
+  const named = String(entry?.routineName || "").trim();
+  if (named) return named;
+
+  const weekKey = entry?.week;
+  if (weekKey === undefined || weekKey === null || weekKey === "") return "";
+
+  const fromRoutines = String(routines?.[weekKey]?.name || "").trim();
+  if (fromRoutines) return fromRoutines;
+
+  const index = Number(weekKey);
+  if (Number.isFinite(index) && index >= 0) return `Routine ${index + 1}`;
+
+  return "";
+}
+
+export function getHistoryDayName(entry) {
+  return String(entry?.workoutType || entry?.day || "").trim();
+}
+
+/** History / last-workout title: "Routine Name | Day name". */
+export function formatHistorySessionTitle(entry, routines) {
+  const routine = getHistoryRoutineName(entry, routines);
+  const day = getHistoryDayName(entry);
+  if (routine && day) return `${routine} | ${day}`;
+  return routine || day || "Workout";
 }
 
 /** Group history so a day can hold a session (or rest) plus stretch. */

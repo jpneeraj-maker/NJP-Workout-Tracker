@@ -24,7 +24,9 @@ import { workoutData } from "./workoutData.js";
 import {
   createStretchEntry,
   formatDurationSeconds,
+  formatHistorySessionTitle,
   getAmrapDurationMinutes,
+  getLocalSaveKey,
   isAmrapDay,
   loadStretchRoutineNames,
   rememberStretchRoutineName,
@@ -944,14 +946,20 @@ function buildAmrapWorkoutRecord(durationSeconds, partialEntries) {
         (entry.actualWeight && entry.actualWeight !== "")
     );
 
+  const routine = data?.routines?.[selectedRoutine];
+
   return {
-    saveKey: new Date().toISOString().slice(0, 10),
+    id: crypto.randomUUID(),
+    saveKey: getLocalSaveKey(),
     date: new Date().toLocaleDateString("en-GB", {
       day: "numeric",
       month: "long",
       year: "numeric",
     }),
     week: selectedRoutine,
+    routineName:
+      String(routine?.name || "").trim() ||
+      `Routine ${Number(selectedRoutine) + 1}`,
     day: day?.name || "",
     workoutType: day?.name || "",
     type: "amrap",
@@ -1035,7 +1043,9 @@ async function endAndSaveAmrapWorkout({
     setData(nextData);
     setWorkoutHistory(nextHistory);
     setSelectedDay(nextDay);
-    setCompletedWorkoutName(workoutRecord.day);
+    setCompletedWorkoutName(
+      formatHistorySessionTitle(workoutRecord, nextData?.routines)
+    );
     setCompletedWorkout(workoutRecord);
     setCompletedStretch(null);
     setFinalWorkoutSeconds(Math.max(0, durationSeconds));
@@ -1123,15 +1133,20 @@ function clearDayProgress(sourceData, routineKey, dayIndex) {
 
 function buildWorkoutRecordFromData(sourceData, durationSeconds) {
   const day = sourceData?.routines?.[selectedRoutine]?.days?.[selectedDay];
+  const routine = sourceData?.routines?.[selectedRoutine];
 
   return {
-    saveKey: new Date().toISOString().slice(0, 10),
+    id: crypto.randomUUID(),
+    saveKey: getLocalSaveKey(),
     date: new Date().toLocaleDateString("en-GB", {
       day: "numeric",
       month: "long",
       year: "numeric",
     }),
     week: selectedRoutine,
+    routineName:
+      String(routine?.name || "").trim() ||
+      `Routine ${Number(selectedRoutine) + 1}`,
     day: day?.name || currentDay?.name || "",
     workoutType: day?.name || currentDay?.name || "",
     type: "workout",
@@ -1246,7 +1261,9 @@ async function endAndSaveWorkout() {
     setData(nextData);
     setWorkoutHistory(nextHistory);
     setSelectedDay(nextDay);
-    setCompletedWorkoutName(workoutRecord.day);
+    setCompletedWorkoutName(
+      formatHistorySessionTitle(workoutRecord, nextData?.routines)
+    );
     setCompletedWorkout(workoutRecord);
     setCompletedStretch(null);
     setFinalWorkoutSeconds(durationSeconds);
@@ -1271,7 +1288,7 @@ async function endAndSaveWorkout() {
 }
 
 function getTodaySaveKey() {
-  return new Date().toISOString().slice(0, 10);
+  return getLocalSaveKey();
 }
 
 function beginStretchSession({ only = false } = {}) {
@@ -1587,7 +1604,7 @@ if (!isDataLoaded)
   }
   console.log("APP WORKOUT HISTORY:", workoutHistory);
   return (
-    <div className="relative flex min-h-dvh flex-col text-white app-safe">
+    <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden text-white app-safe">
       <div
         aria-hidden="true"
         className="pointer-events-none fixed inset-0 z-0 bg-black"
@@ -1601,7 +1618,7 @@ if (!isDataLoaded)
 <div
   className={`
     relative z-10
-    flex flex-1 flex-col
+    flex min-h-0 flex-1 flex-col
     transition-all duration-250 ease-out
     ${isTransitioning
       ? transitionDirection === "forward"
@@ -1611,7 +1628,7 @@ if (!isDataLoaded)
     }
   `}
 >
-  <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pb-2">
+  <div className="mx-auto flex w-full max-w-md min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain px-3 pb-[max(0.75rem,0.5rem)] pt-1 sm:px-4">
 
 {activeTab === "history" ? (
 <HistoryPage

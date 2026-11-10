@@ -10,20 +10,29 @@ import {
   Trash2,
 } from "lucide-react";
 import {
+  createAmrapHistoryEntry,
   createEmptySet,
   createExercise,
   createRestEntry,
   createStretchEntry,
   createWorkoutEntry,
   formatDurationSeconds,
+  formatHistorySessionTitle,
   getEntryDurationSeconds,
+  getLocalSaveKey,
   groupHistoryByDate,
+  isAmrapDay,
   isRestEntry,
   isSessionEntry,
   isStretchEntry,
+  loadStretchRoutineNames,
+  parseDurationToSeconds,
+  rememberStretchRoutineName,
+  sanitizeAmrapPartials,
   upsertDaySession,
   upsertDayStretch,
 } from "../schema";
+import FittingText from "../components/FittingText";
 
 function formatDateLabel(dateKey) {
   if (!dateKey) return "";
@@ -37,8 +46,7 @@ function formatDateLabel(dateKey) {
 }
 
 function getTodayKey() {
-  const today = new Date();
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  return getLocalSaveKey();
 }
 
 /** Longest activity streak allowing a single off day between hits. */
@@ -74,6 +82,7 @@ export default function HistoryPage(props) {
   } = props;
 
   const [selectedRoutine, setSelectedRoutine] = React.useState(null);
+  const [selectedRoutineKey, setSelectedRoutineKey] = React.useState(null);
   const [selectedDay, setSelectedDay] = React.useState(null);
   const [expandedExerciseIndex, setExpandedExerciseIndex] =
     React.useState(null);
@@ -85,6 +94,15 @@ export default function HistoryPage(props) {
   const [isEditing, setIsEditing] = React.useState(false);
   const [editableWorkout, setEditableWorkout] = React.useState(null);
   const [pendingDelete, setPendingDelete] = React.useState(null);
+  const [showStretchForm, setShowStretchForm] = React.useState(false);
+  const [stretchName, setStretchName] = React.useState("");
+  const [stretchDuration, setStretchDuration] = React.useState("");
+  const [stretchNames, setStretchNames] = React.useState(() =>
+    loadStretchRoutineNames()
+  );
+
+  const isAmrapWorkout = (workout) =>
+    workout?.type === "amrap" || Array.isArray(workout?.circuit);
 
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const firstDay = new Date(currentYear, currentMonth, 1).getDay();
@@ -102,6 +120,9 @@ export default function HistoryPage(props) {
   React.useEffect(() => {
     setPendingDelete(null);
     setExpandedExerciseIndex(null);
+    setShowStretchForm(false);
+    setStretchName("");
+    setStretchDuration("");
   }, [selectedDate]);
 
   const dayBucket = selectedDate ? historyByDate[selectedDate] : null;
@@ -147,70 +168,139 @@ export default function HistoryPage(props) {
   const deletePendingEntry = () => {
     if (!selectedDate || !pendingDelete) return;
 
-    const updatedHistory = workoutHistory.filter((w) => {
-      if (w.saveKey !== selectedDate) return true;
-      if (pendingDelete === "stretch") return !isStretchEntry(w);
-      if (pendingDelete === "session") {
-        return !(isSessionEntry(w) || isRestEntry(w));
-      }
-      return true;
-    });
+    const stretchTarget = selectedStretch;
+    const sessionTarget = selectedSession || selectedRest;
 
-    setWorkoutHistory(updatedHistory);
+    setWorkoutHistory((prev) =>
+      (prev || []).filter((w) => {
+        if (pendingDelete === "stretch") {
+          if (!isStretchEntry(w)) return true;
+          if (stretchTarget?.id && w.id) return w.id !== stretchTarget.id;
+          return String(w.saveKey) !== String(selectedDate);
+        }
+
+        // Delete workout or rest for this day; keep stretch.
+        if (isStretchEntry(w)) return true;
+
+        if (sessionTarget?.id && w.id) {
+          return w.id !== sessionTarget.id;
+        }
+
+        const key = String(w.saveKey || "");
+        if (key === String(selectedDate)) return false;
+        if (sessionTarget?.saveKey && key === String(sessionTarget.saveKey)) {
+          return false;
+        }
+
+        // Fallback: drop the exact displayed object fields for older entries without id.
+        if (
+          sessionTarget &&
+          key === String(sessionTarget.saveKey || selectedDate) &&
+          (isSessionEntry(w) || isRestEntry(w)) &&
+          (w.workoutType || "") === (sessionTarget.workoutType || "") &&
+          (w.duration || "") === (sessionTarget.duration || "") &&
+          (w.createdAt || null) === (sessionTarget.createdAt || null)
+        ) {
+          return false;
+        }
+
+        return true;
+      })
+    );
+
     setPendingDelete(null);
     setIsEditing(false);
     setEditableWorkout(null);
   };
 
-  const markStretchDone = () => {
+  const openStretchForm = () => {
     if (!selectedDate || isFutureDate || selectedStretch) return;
-    setWorkoutHistory(
-      upsertDayStretch(workoutHistory, createStretchEntry(selectedDate))
-    );
+    setStretchName("");
+    setStretchDuration("");
+    setShowStretchForm(true);
+    setPendingDelete(null);
+  };
+
+  const saveStretchFromForm = () => {
+    if (!selectedDate || isFutureDate || selectedStretch) return;
+
+    const name = stretchName.trim() || "Stretch / Mobility";
+    const seconds = parseDurationToSeconds(stretchDuration);
+    const nextNames = rememberStretchRoutineName(name, stretchNames);
+    const stretchEntry = createStretchEntry(selectedDate, {
+      name,
+      duration: formatDurationSeconds(seconds),
+      durationSeconds: seconds,
+    });
+
+    setStretchNames(nextNames);
+    setWorkoutHistory(upsertDayStretch(workoutHistory, stretchEntry));
+    setShowStretchForm(false);
+    setStretchName("");
+    setStretchDuration("");
+  };
+
+  const saveEditableWorkout = () => {
+    if (!editableWorkout) return;
+
+    let next = structuredClone(editableWorkout);
+    const seconds = getEntryDurationSeconds(next);
+    next.durationSeconds = seconds;
+    next.duration = formatDurationSeconds(seconds) || next.duration || "";
+
+    if (isAmrapWorkout(next)) {
+      next.type = "amrap";
+      next.circuitsCompleted = Number(next.circuitsCompleted) || 0;
+      next.partialCircuit = sanitizeAmrapPartials(next.partialCircuit);
+      next.exercises = [];
+    }
+
+    setWorkoutHistory(upsertDaySession(workoutHistory, next));
+    setIsEditing(false);
+    setEditableWorkout(null);
   };
 
   const panelBorder = selectedRest
     ? "border-emerald-500/25"
-    : "border-[#c7a86a55]";
+    : "border-violet-400/35";
 
   return (
     <>
-      <div className="pt-4 mb-3 relative flex items-center justify-center">
-        <div className="absolute left-0">
-          <button
-            onClick={() => {
-              window.history.pushState({}, "");
-              setActiveScreen("landing");
-            }}
-            className="inline-flex items-center gap-2 px-4 py-3 rounded-lg bg-black/35 backdrop-blur-sm text-[#d7c7a4] border border-[#c7a86a55] hover:bg-black/50 active:scale-[0.97] transition"
-          >
-            <ArrowLeft size={14} />
-          </button>
+      <div className="mb-3 grid grid-cols-[auto_1fr_auto] items-center gap-2 pt-3">
+        <button
+          onClick={() => {
+            window.history.pushState({}, "");
+            setActiveScreen("landing");
+          }}
+          className="inline-flex items-center gap-2 px-3 py-2.5 rounded-lg bg-black/35 backdrop-blur-sm text-violet-200 border border-violet-400/45 hover:bg-black/50 active:scale-[0.97] transition"
+        >
+          <ArrowLeft size={14} />
+        </button>
+
+        <div className="min-w-0 text-center">
+          <div className="text-lg font-semibold text-white sm:text-xl">
+            Workout History
+          </div>
+          <div className="mx-auto mt-1 h-0.5 w-10 rounded-full bg-violet-400/70" />
         </div>
 
-        <div className="text-center text-xl font-semibold text-white">
-          Workout History
-        </div>
-
-        <div className="absolute right-0">
-          <button
-            onClick={() => {
-              if (typeof setActiveTab === "function") {
-                setActiveTab("analytics");
-              }
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-lg bg-black/35 backdrop-blur-sm text-[#d7c7a4] border border-[#c7a86a55] hover:bg-black/50 active:scale-[0.97] transition"
-            title="Analytics"
-          >
-            <ChartNoAxesCombined size={16} />
-          </button>
-        </div>
+        <button
+          onClick={() => {
+            if (typeof setActiveTab === "function") {
+              setActiveTab("analytics");
+            }
+          }}
+          className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-lg bg-black/35 backdrop-blur-sm text-emerald-200 border border-emerald-400/45 hover:bg-black/50 active:scale-[0.97] transition"
+          title="Analytics"
+        >
+          <ChartNoAxesCombined size={16} />
+        </button>
       </div>
 
       {/* Month selector */}
       <div className="flex items-center justify-center gap-2 mb-3 text-white/80">
         <button
-          className="p-2 rounded-lg border border-white/10 bg-black/20 text-[#d7c7a4] active:scale-95 transition"
+          className="p-2 rounded-lg border border-violet-400/25 bg-black/20 text-violet-200 active:scale-95 transition"
           onClick={() => {
             if (currentMonth === 0) {
               setCurrentMonth(11);
@@ -222,14 +312,14 @@ export default function HistoryPage(props) {
         >
           <ChevronLeft size={16} />
         </button>
-        <div className="text-sm font-medium text-[#d7c7a4] bg-black/30 border border-[#c7a86a40] px-4 py-1.5 rounded-lg min-w-[9.5rem] text-center">
+        <div className="text-sm font-medium text-violet-100 bg-black/30 border border-violet-400/40 px-4 py-1.5 rounded-lg min-w-[9.5rem] text-center">
           {new Date(currentYear, currentMonth).toLocaleString("default", {
             month: "long",
             year: "numeric",
           })}
         </div>
         <button
-          className="p-2 rounded-lg border border-white/10 bg-black/20 text-[#d7c7a4] active:scale-95 transition"
+          className="p-2 rounded-lg border border-violet-400/25 bg-black/20 text-violet-200 active:scale-95 transition"
           onClick={() => {
             if (currentMonth === 11) {
               setCurrentMonth(0);
@@ -245,47 +335,47 @@ export default function HistoryPage(props) {
 
       {/* Month strip */}
       <div className="mb-3 flex justify-center">
-        <div className="inline-flex flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-lg border border-[#c7a86a40] bg-black/55 backdrop-blur-md px-3.5 py-1.5 text-[11px] uppercase tracking-[0.16em] text-[#d7c7a4]">
+        <div className="inline-flex flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-lg border border-violet-400/35 bg-violet-500/5 backdrop-blur-md px-3.5 py-1.5 text-[11px] uppercase tracking-[0.16em] text-violet-100/90">
           <span>
             <span className="font-semibold text-white">{monthStats.workouts}</span>{" "}
-            <span className="text-[#d7c7a4]/90">workouts</span>
+            <span className="text-violet-200/80">workouts</span>
           </span>
-          <span className="text-[#c7a86a66]">·</span>
+          <span className="text-violet-400/50">·</span>
           <span>
             <span className="font-semibold text-emerald-300">{monthStats.rest}</span>{" "}
-            <span className="text-[#d7c7a4]/90">rest</span>
+            <span className="text-violet-200/80">rest</span>
           </span>
-          <span className="text-[#c7a86a66]">·</span>
+          <span className="text-violet-400/50">·</span>
           <span>
             <span className="font-semibold text-sky-300">{monthStats.stretch}</span>{" "}
-            <span className="text-[#d7c7a4]/90">stretch</span>
+            <span className="text-violet-200/80">stretch</span>
           </span>
-          <span className="text-[#c7a86a66]">·</span>
+          <span className="text-violet-400/50">·</span>
           <span>
             <span className="font-semibold text-white">
               {monthStats.workoutStreak}
             </span>{" "}
-            <span className="text-[#d7c7a4]/90">w streak</span>
+            <span className="text-violet-200/80">w streak</span>
           </span>
-          <span className="text-[#c7a86a66]">·</span>
+          <span className="text-violet-400/50">·</span>
           <span>
             <span className="font-semibold text-sky-300">
               {monthStats.stretchStreak}
             </span>{" "}
-            <span className="text-[#d7c7a4]/90">s streak</span>
+            <span className="text-violet-200/80">s streak</span>
           </span>
         </div>
       </div>
 
       {/* Calendar */}
-      <div className="bg-black/40 backdrop-blur-md border border-[#c7a86a55] rounded-2xl p-4 shadow-lg shadow-black/40 mb-4">
-        <div className="grid grid-cols-7 gap-2 text-center text-xs text-[#d7c7a4]/80 mb-2">
+      <div className="bg-black/40 backdrop-blur-md border border-violet-400/40 rounded-2xl p-3 shadow-lg shadow-violet-950/20 mb-4 sm:p-4">
+        <div className="mb-2 grid grid-cols-7 gap-1 text-center text-xs text-violet-200/70 sm:gap-2">
           {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
             <div key={i}>{d}</div>
           ))}
         </div>
 
-        <div className="grid grid-cols-7 gap-2 text-center text-xs text-white/80">
+        <div className="grid grid-cols-7 gap-1 text-center text-xs text-white/80 sm:gap-2">
           {[
             ...Array(startOffset).fill(null),
             ...Array(daysInMonth).keys(),
@@ -318,16 +408,16 @@ export default function HistoryPage(props) {
                   ${isFuture ? "opacity-30 pointer-events-none" : ""}
                   ${
                     isSelected
-                      ? "bg-[#c7a86a33] border border-[#c7a86a] shadow-md shadow-black/30 scale-105"
+                      ? "bg-violet-500/25 border border-violet-400 shadow-md shadow-violet-950/40 scale-105"
                       : hasSession
-                        ? "bg-[#c7a86a22] border border-[#c7a86a40] hover:bg-[#c7a86a33]"
+                        ? "bg-violet-500/15 border border-violet-400/35 hover:bg-violet-500/20"
                         : isRest
                           ? "bg-emerald-500/15 border border-emerald-400/30 hover:bg-emerald-500/25"
                           : hasStretch
                             ? "bg-sky-500/10 border border-sky-400/25 hover:bg-sky-500/20"
                             : "bg-black/40 border border-transparent hover:bg-white/10"
                   }
-                  ${isToday && !isSelected ? "ring-1 ring-[#c7a86a66]" : ""}
+                  ${isToday && !isSelected ? "ring-1 ring-violet-400/50" : ""}
                 `}
               >
                 <div className="text-white font-medium leading-none">
@@ -338,7 +428,7 @@ export default function HistoryPage(props) {
                     {(hasSession || isRest) && (
                       <div
                         className={`w-1.5 h-1.5 rounded-full ${
-                          isRest ? "bg-emerald-400" : "bg-[#c7a86a]"
+                          isRest ? "bg-emerald-400" : "bg-violet-400"
                         }`}
                       />
                     )}
@@ -354,7 +444,7 @@ export default function HistoryPage(props) {
 
         <div className="mt-3 flex items-center justify-center gap-4 text-[10px] uppercase tracking-[0.16em] text-white/45">
           <span className="inline-flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#c7a86a]" />
+            <span className="w-2 h-2 rounded-full bg-violet-400" />
             Workout
           </span>
           <span className="inline-flex items-center gap-1.5">
@@ -372,10 +462,37 @@ export default function HistoryPage(props) {
       <div
         className={`mt-2 bg-black/40 backdrop-blur-md border ${panelBorder} rounded-2xl p-4 shadow-lg shadow-black/40`}
       >
-        <div className="mb-3 text-[11px] uppercase tracking-[0.22em] text-[#d7c7a4]/70">
+        <div className="mb-3 text-[11px] uppercase tracking-[0.22em] text-violet-200/70">
           {formatDateLabel(selectedDate)}
           {selectedDate === todayKey ? " · Today" : ""}
         </div>
+
+        {pendingDelete && (
+          <div className="mb-4 rounded-xl border border-red-400/30 bg-red-500/10 p-3">
+            <div className="text-sm text-white/85 mb-3">
+              {pendingDelete === "stretch"
+                ? "Remove stretch for this day?"
+                : "Delete this entry? Stretch for the day will be kept."}{" "}
+              This can’t be undone.
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={deletePendingEntry}
+                className="flex-1 bg-red-500/80 text-white py-2 rounded-lg text-sm active:scale-[0.98] transition"
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingDelete(null)}
+                className="flex-1 bg-white/10 text-white py-2 rounded-lg text-sm border border-white/10 active:scale-[0.98] transition"
+              >
+                Keep
+              </button>
+            </div>
+          </div>
+        )}
 
         {selectedRest && !isEditing ? (
           <div className="flex items-start justify-between gap-3 mb-2">
@@ -408,16 +525,17 @@ export default function HistoryPage(props) {
         ) : selectedSession || isEditing ? (
           <>
               <div className="flex items-start justify-between gap-3 mb-3">
-                <div className="min-w-0">
-                  <div className="text-lg font-semibold text-white truncate">
-                    {isEditing ? "Editing · " : ""}
-                    {activeWorkout?.workoutType}
-                  </div>
-                  {activeWorkout?.routineName && (
-                    <div className="mt-0.5 text-xs text-[#d7c7a4]/70 truncate">
-                      {activeWorkout.routineName}
-                    </div>
-                  )}
+                <div className="min-w-0 flex-1">
+                  <FittingText
+                    text={`${isEditing ? "Editing · " : ""}${formatHistorySessionTitle(
+                      activeWorkout,
+                      routines
+                    )}`}
+                    className="font-semibold text-white"
+                    maxSize={18}
+                    minSize={12}
+                    maxLines={2}
+                  />
                 </div>
 
                 {!isEditing && (
@@ -444,21 +562,103 @@ export default function HistoryPage(props) {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-y-2 mb-4 text-sm">
-                <div className="text-white/60 text-xs flex items-center gap-2">
-                  Workout:
-                  {isEditing ? (
+              {isEditing ? (
+                <div className="grid grid-cols-2 gap-y-2 mb-4 text-sm">
+                  <div className="text-white/60 text-xs flex items-center gap-2">
+                    Duration:
                     <input
                       type="text"
                       value={activeWorkout.duration || ""}
                       onChange={(e) => {
                         const updated = structuredClone(editableWorkout);
                         updated.duration = e.target.value;
+                        updated.durationSeconds = parseDurationToSeconds(
+                          e.target.value
+                        );
                         setEditableWorkout(updated);
                       }}
-                      className="bg-white/10 text-white px-2 py-1 rounded w-20 border border-[#c7a86a33]"
+                      placeholder="mm:ss"
+                      className="bg-white/10 text-white px-2 py-1 rounded w-24 border border-[#c7a86a33]"
                     />
-                  ) : (
+                  </div>
+
+                  <div className="text-right text-white/60 text-xs flex items-center justify-end gap-2">
+                    {isAmrapWorkout(activeWorkout) ? (
+                      <>
+                        Circuits:
+                        <input
+                          type="number"
+                          min="0"
+                          value={activeWorkout.circuitsCompleted ?? 0}
+                          onChange={(e) => {
+                            const updated = structuredClone(editableWorkout);
+                            updated.circuitsCompleted =
+                              Number(e.target.value) || 0;
+                            setEditableWorkout(updated);
+                          }}
+                          className="bg-white/10 text-white px-2 py-1 rounded w-16 border border-[#c7a86a33] text-right"
+                        />
+                      </>
+                    ) : (
+                      `Exercises: ${activeWorkout.exercises?.length || 0}`
+                    )}
+                  </div>
+                </div>
+              ) : selectedStretch ? (
+                <div className="mb-4 rounded-2xl border border-white/10 bg-black/25 p-3">
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="min-w-0">
+                      <div className="text-lg font-semibold tabular-nums text-[#d7c7a4]">
+                        {formatDurationSeconds(
+                          getEntryDurationSeconds(activeWorkout)
+                        ) ||
+                          activeWorkout.duration ||
+                          "-"}
+                      </div>
+                      <div className="mt-0.5 text-[10px] uppercase tracking-[0.14em] text-white/45">
+                        Workout
+                      </div>
+                      <div className="mt-0.5 break-words text-[11px] text-white/40">
+                        {isAmrapWorkout(activeWorkout)
+                          ? `${activeWorkout.circuitsCompleted ?? 0} circuits`
+                          : `${activeWorkout.exercises?.length || 0} exercises`}
+                      </div>
+                    </div>
+
+                    <div className="min-w-0 border-x border-white/10 px-1">
+                      <div className="text-lg font-semibold tabular-nums text-sky-300">
+                        {formatDurationSeconds(
+                          getEntryDurationSeconds(selectedStretch)
+                        ) || "-"}
+                      </div>
+                      <div className="mt-0.5 text-[10px] uppercase tracking-[0.14em] text-sky-300/70">
+                        Stretch
+                      </div>
+                      <div className="mt-0.5 break-words text-[11px] text-sky-200/55">
+                        {selectedStretch.name || "Mobility"}
+                      </div>
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="text-xl font-semibold tabular-nums text-white">
+                        {formatDurationSeconds(
+                          getEntryDurationSeconds(activeWorkout) +
+                            getEntryDurationSeconds(selectedStretch)
+                        )}
+                      </div>
+                      <div className="mt-0.5 text-[10px] uppercase tracking-[0.14em] text-white/55">
+                        Total
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-white/35">
+                        session
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-y-2 mb-4 text-sm">
+                  <div className="text-white/60 text-xs flex items-center gap-2">
+                    Duration:
                     <span className="text-[#d7c7a4]">
                       {formatDurationSeconds(
                         getEntryDurationSeconds(activeWorkout)
@@ -466,48 +666,24 @@ export default function HistoryPage(props) {
                         activeWorkout.duration ||
                         "-"}
                     </span>
-                  )}
-                </div>
-
-                <div className="text-right text-white/60 text-xs">
-                  {activeWorkout.type === "amrap" ||
-                  Array.isArray(activeWorkout.circuit)
-                    ? `Circuits: ${activeWorkout.circuitsCompleted ?? 0}`
-                    : `Exercises: ${activeWorkout.exercises?.length || 0}`}
-                </div>
-              </div>
-
-              {!isEditing && selectedStretch && (
-                <div className="mb-4 rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 py-2.5 text-xs">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="uppercase tracking-[0.16em] text-sky-300/80 mb-0.5">
-                        Stretch
-                      </div>
-                      <div className="truncate text-white/85">
-                        {selectedStretch.name || "Stretch / Mobility"}
-                      </div>
-                    </div>
-                    <div className="shrink-0 text-[#d7c7a4]">
-                      {formatDurationSeconds(
-                        getEntryDurationSeconds(selectedStretch)
-                      )}
-                    </div>
                   </div>
-                  <div className="mt-2 flex items-center justify-between text-white/55">
-                    <span>Total</span>
-                    <span className="text-[#d7c7a4]">
-                      {formatDurationSeconds(
-                        getEntryDurationSeconds(activeWorkout) +
-                          getEntryDurationSeconds(selectedStretch)
-                      )}
-                    </span>
+
+                  <div className="text-right text-white/60 text-xs flex items-center justify-end gap-2">
+                    {isAmrapWorkout(activeWorkout) ? (
+                      <>
+                        Circuits:
+                        <span className="text-[#d7c7a4]">
+                          {activeWorkout.circuitsCompleted ?? 0}
+                        </span>
+                      </>
+                    ) : (
+                      `Exercises: ${activeWorkout.exercises?.length || 0}`
+                    )}
                   </div>
                 </div>
               )}
 
-              {(activeWorkout.type === "amrap" ||
-                Array.isArray(activeWorkout.circuit)) && (
+              {isAmrapWorkout(activeWorkout) && (
                 <div className="mb-4 space-y-3 text-sm text-white/80">
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                     <div className="mb-2 text-[10px] uppercase tracking-[0.2em] text-white/45">
@@ -519,7 +695,7 @@ export default function HistoryPage(props) {
                           key={`amrap-circuit-${index}`}
                           className="flex items-center justify-between gap-3"
                         >
-                          <div className="min-w-0 truncate font-medium text-white">
+                          <div className="min-w-0 break-words font-medium text-white">
                             {item.name}
                           </div>
                           <div className="shrink-0 text-xs text-[#d7c7a4]">
@@ -536,38 +712,147 @@ export default function HistoryPage(props) {
                     </div>
                   </div>
 
-                  {activeWorkout.partialCircuit?.length > 0 && (
+                  {(() => {
+                    const loggedPartials = sanitizeAmrapPartials(
+                      activeWorkout.partialCircuit
+                    );
+                    const editingPartials =
+                      isEditing &&
+                      (activeWorkout.partialCircuit || []).length > 0;
+                    const showPartialSection =
+                      loggedPartials.length > 0 || editingPartials;
+
+                    if (!showPartialSection) {
+                      if (!isEditing || !(activeWorkout.circuit || []).length) {
+                        return null;
+                      }
+
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = structuredClone(editableWorkout);
+                            updated.partialCircuit = (
+                              updated.circuit || []
+                            ).map((circuitItem) => ({
+                              ...circuitItem,
+                              actualWeight: "",
+                              actualReps: "",
+                            }));
+                            setEditableWorkout(updated);
+                          }}
+                          className="text-sm text-[#d7c7a4]"
+                        >
+                          + Add incomplete circuit
+                        </button>
+                      );
+                    }
+
+                    const rows = isEditing
+                      ? activeWorkout.partialCircuit?.length
+                        ? activeWorkout.partialCircuit
+                        : (activeWorkout.circuit || []).map((item) => ({
+                            ...item,
+                            actualWeight: "",
+                            actualReps: "",
+                          }))
+                      : loggedPartials;
+
+                    return (
                     <div className="rounded-2xl border border-[#c7a86a40] bg-[#c7a86a12] p-4">
                       <div className="mb-2 text-[10px] uppercase tracking-[0.2em] text-[#d7c7a4]/80">
-                        Partial circuit
+                        Partial / incomplete circuit
                       </div>
-                      <div className="space-y-2">
-                        {activeWorkout.partialCircuit.map((item, index) => (
+                      {isEditing && (
+                        <div className="mb-3 text-xs text-white/45">
+                          Enter what you finished in the last incomplete round.
+                          Leave blank if none.
+                        </div>
+                      )}
+                      <div className="space-y-3">
+                        {rows.map((item, index) => (
                           <div
                             key={`amrap-partial-${index}`}
-                            className="flex items-center justify-between gap-3"
+                            className="rounded-xl border border-white/10 bg-black/20 px-3 py-2"
                           >
-                            <div className="min-w-0 truncate font-medium text-white">
+                            <div className="mb-2 min-w-0 break-words font-medium text-white">
                               {item.name}
                             </div>
-                            <div className="shrink-0 text-xs text-[#d7c7a4]">
-                              {item.actualWeight || item.plannedWeight || "-"} ×{" "}
-                              {item.actualReps || "0"}
-                              {item.targetReps ? ` / ${item.targetReps}` : ""}
-                            </div>
+                            {isEditing ? (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={item.actualWeight || ""}
+                                  onChange={(e) => {
+                                    const updated =
+                                      structuredClone(editableWorkout);
+                                    if (!updated.partialCircuit?.length) {
+                                      updated.partialCircuit = (
+                                        updated.circuit || []
+                                      ).map((circuitItem) => ({
+                                        ...circuitItem,
+                                        actualWeight:
+                                          circuitItem.plannedWeight || "",
+                                        actualReps: "",
+                                      }));
+                                    }
+                                    updated.partialCircuit[index].actualWeight =
+                                      e.target.value;
+                                    setEditableWorkout(updated);
+                                  }}
+                                  placeholder="weight"
+                                  className="w-20 bg-white/10 text-white px-2 py-1 rounded text-sm border border-[#c7a86a33]"
+                                />
+                                <span className="text-white/50">×</span>
+                                <input
+                                  type="number"
+                                  value={item.actualReps || ""}
+                                  onChange={(e) => {
+                                    const updated =
+                                      structuredClone(editableWorkout);
+                                    if (!updated.partialCircuit?.length) {
+                                      updated.partialCircuit = (
+                                        updated.circuit || []
+                                      ).map((circuitItem) => ({
+                                        ...circuitItem,
+                                        actualWeight:
+                                          circuitItem.plannedWeight || "",
+                                        actualReps: "",
+                                      }));
+                                    }
+                                    updated.partialCircuit[index].actualReps =
+                                      e.target.value;
+                                    setEditableWorkout(updated);
+                                  }}
+                                  placeholder="reps"
+                                  className="w-16 bg-white/10 text-white px-2 py-1 rounded text-sm border border-[#c7a86a33]"
+                                />
+                                {item.targetReps ? (
+                                  <span className="text-xs text-white/40">
+                                    / {item.targetReps}
+                                  </span>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <div className="text-xs text-[#d7c7a4]">
+                                {item.actualWeight || item.plannedWeight || "-"}{" "}
+                                × {item.actualReps || "0"}
+                                {item.targetReps
+                                  ? ` / ${item.targetReps}`
+                                  : ""}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               )}
 
               <div className="space-y-3 text-sm text-white/80">
-                {!(
-                  activeWorkout.type === "amrap" ||
-                  Array.isArray(activeWorkout.circuit)
-                ) &&
+                {!isAmrapWorkout(activeWorkout) &&
                   activeWorkout.exercises?.map((exercise, i) => {
                     const isExpanded = expandedExerciseIndex === i;
 
@@ -794,7 +1079,7 @@ export default function HistoryPage(props) {
                     );
                   })}
 
-                {isEditing && (
+                {isEditing && !isAmrapWorkout(activeWorkout) && (
                   <button
                     onClick={() => {
                       const updated = structuredClone(editableWorkout);
@@ -810,13 +1095,7 @@ export default function HistoryPage(props) {
                 {isEditing && (
                   <div className="flex gap-2 mt-4">
                     <button
-                      onClick={() => {
-                        setWorkoutHistory(
-                          upsertDaySession(workoutHistory, editableWorkout)
-                        );
-                        setIsEditing(false);
-                        setEditableWorkout(null);
-                      }}
+                      onClick={saveEditableWorkout}
                       className="w-full bg-[#c7a86a] text-black font-medium py-2.5 rounded-xl active:scale-[0.98] transition"
                     >
                       Save
@@ -876,11 +1155,11 @@ export default function HistoryPage(props) {
           </>
         )}
 
-        {/* Stretch / mobility quick check — can coexist with workout or rest */}
+        {/* Stretch / mobility — can coexist with workout or rest */}
         {!isEditing && !isFutureDate && (
           <div
             className={`mt-4 rounded-xl border p-3 ${
-              selectedStretch
+              selectedStretch || showStretchForm
                 ? "border-sky-400/35 bg-sky-500/10"
                 : "border-white/10 bg-white/[0.03]"
             }`}
@@ -890,21 +1169,25 @@ export default function HistoryPage(props) {
                 <div className="text-[10px] uppercase tracking-[0.2em] text-sky-300/80 mb-1">
                   Stretch / Mobility
                 </div>
-                <div className="text-sm text-white/80 truncate">
-                  {selectedStretch
-                    ? selectedStretch.name
-                      ? `${selectedStretch.name} · done`
-                      : "Done for this day"
-                    : "Not logged yet"}
-                </div>
-                {selectedStretch &&
-                  getEntryDurationSeconds(selectedStretch) > 0 && (
-                    <div className="mt-1 text-xs text-sky-200/90">
-                      {formatDurationSeconds(
-                        getEntryDurationSeconds(selectedStretch)
-                      )}
+                {!showStretchForm && (
+                  <>
+                    <div className="text-sm text-white/80 break-words">
+                      {selectedStretch
+                        ? selectedStretch.name
+                          ? `${selectedStretch.name} · done`
+                          : "Done for this day"
+                        : "Not logged yet"}
                     </div>
-                  )}
+                    {selectedStretch &&
+                      getEntryDurationSeconds(selectedStretch) > 0 && (
+                        <div className="mt-1 text-xs text-sky-200/90">
+                          {formatDurationSeconds(
+                            getEntryDurationSeconds(selectedStretch)
+                          )}
+                        </div>
+                      )}
+                  </>
+                )}
               </div>
 
               {selectedStretch ? (
@@ -915,42 +1198,87 @@ export default function HistoryPage(props) {
                 >
                   <Trash2 size={15} />
                 </button>
-              ) : (
+              ) : !showStretchForm ? (
                 <button
-                  onClick={markStretchDone}
+                  onClick={openStretchForm}
                   className="shrink-0 rounded-lg border border-sky-400/40 bg-sky-500/15 px-3 py-2 text-xs uppercase tracking-[0.14em] text-sky-200 active:scale-[0.98] transition"
                 >
-                  Mark done
+                  Log stretch
                 </button>
-              )}
+              ) : null}
             </div>
+
+            {showStretchForm && !selectedStretch && (
+              <div className="mt-3 space-y-3">
+                <div>
+                  <label className="block mb-1 text-[10px] uppercase tracking-[0.16em] text-sky-300/80">
+                    Routine name
+                  </label>
+                  <input
+                    type="text"
+                    value={stretchName}
+                    onChange={(e) => setStretchName(e.target.value)}
+                    placeholder="e.g. Hip mobility"
+                    className="w-full rounded-lg border border-sky-400/30 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/30"
+                  />
+                  {stretchNames.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {stretchNames.map((name) => (
+                        <button
+                          key={name}
+                          type="button"
+                          onClick={() => setStretchName(name)}
+                          className={`rounded-lg border px-2 py-1 text-xs transition ${
+                            stretchName === name
+                              ? "border-sky-300 bg-sky-500/25 text-sky-100"
+                              : "border-white/10 bg-white/5 text-white/70"
+                          }`}
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block mb-1 text-[10px] uppercase tracking-[0.16em] text-sky-300/80">
+                    Duration (mm:ss)
+                  </label>
+                  <input
+                    type="text"
+                    value={stretchDuration}
+                    onChange={(e) => setStretchDuration(e.target.value)}
+                    placeholder="10:00"
+                    className="w-full rounded-lg border border-sky-400/30 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/30"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={saveStretchFromForm}
+                    className="flex-1 rounded-lg bg-sky-400 text-black font-medium py-2 text-sm active:scale-[0.98] transition"
+                  >
+                    Save stretch
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowStretchForm(false);
+                      setStretchName("");
+                      setStretchDuration("");
+                    }}
+                    className="flex-1 rounded-lg border border-white/10 bg-white/5 text-white/70 py-2 text-sm active:scale-[0.98] transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {pendingDelete && (
-          <div className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 p-3">
-            <div className="text-sm text-white/85 mb-3">
-              {pendingDelete === "stretch"
-                ? "Remove stretch for this day?"
-                : "Delete this entry? Stretch for the day will be kept."}{" "}
-              This can’t be undone.
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={deletePendingEntry}
-                className="flex-1 bg-red-500/80 text-white py-2 rounded-lg text-sm active:scale-[0.98] transition"
-              >
-                Delete
-              </button>
-              <button
-                onClick={() => setPendingDelete(null)}
-                className="flex-1 bg-white/10 text-white py-2 rounded-lg text-sm border border-white/10 active:scale-[0.98] transition"
-              >
-                Keep
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       {showLogOptions && (
@@ -965,10 +1293,13 @@ export default function HistoryPage(props) {
 
             <div className="space-y-2 max-h-72 overflow-y-auto">
               {!selectedRoutine ? (
-                Object.values(routines || {}).map((routine, i) => (
+                Object.entries(routines || {}).map(([key, routine]) => (
                   <button
-                    key={i}
-                    onClick={() => setSelectedRoutine(routine)}
+                    key={key}
+                    onClick={() => {
+                      setSelectedRoutine(routine);
+                      setSelectedRoutineKey(key);
+                    }}
                     className="w-full text-left bg-white/5 hover:bg-[#c7a86a18] border border-white/10 hover:border-[#c7a86a55] p-3 rounded-xl text-white transition-all duration-200 active:scale-[0.98]"
                   >
                     {routine.name}
@@ -979,28 +1310,48 @@ export default function HistoryPage(props) {
                   <button
                     key={i}
                     onClick={() => {
-                      const generatedWorkout = {
-                        ...createWorkoutEntry({
-                          date: selectedDate,
-                          routineName: selectedRoutine.name,
-                          workoutType: day.name,
-                        }),
-                        exercises: day.exercises.map((ex) => ({
-                          name: ex.name,
-                          sets: ex.sets.map(() => createEmptySet()),
-                        })),
-                      };
+                      const generatedWorkout = isAmrapDay(day)
+                        ? {
+                            ...createAmrapHistoryEntry({
+                              date: selectedDate,
+                              routineName: selectedRoutine.name,
+                              day,
+                            }),
+                            week: selectedRoutineKey,
+                          }
+                        : {
+                            ...createWorkoutEntry({
+                              date: selectedDate,
+                              routineName: selectedRoutine.name,
+                              workoutType: day.name,
+                            }),
+                            week: selectedRoutineKey,
+                            exercises: (day.exercises || []).map((ex) => ({
+                              name: ex.name,
+                              sets: (ex.sets || []).map(() => createEmptySet()),
+                            })),
+                          };
 
                       setEditableWorkout(generatedWorkout);
                       setIsEditing(true);
                       setShowLogOptions(false);
                       setSelectedRoutine(null);
+                      setSelectedRoutineKey(null);
                       setSelectedDay(null);
-                      setExpandedExerciseIndex(0);
+                      setExpandedExerciseIndex(
+                        isAmrapDay(day) ? null : 0
+                      );
                     }}
                     className="w-full text-left bg-white/5 hover:bg-[#c7a86a18] border border-white/10 hover:border-[#c7a86a55] p-3 rounded-xl text-white transition-all duration-200 active:scale-[0.98]"
                   >
-                    {day.name}
+                    <div className="flex items-center justify-between gap-2">
+                      <span>{day.name}</span>
+                      {isAmrapDay(day) && (
+                        <span className="text-[10px] uppercase tracking-[0.14em] text-[#d7c7a4]/80">
+                          AMRAP
+                        </span>
+                      )}
+                    </div>
                   </button>
                 ))
               ) : null}
@@ -1009,7 +1360,10 @@ export default function HistoryPage(props) {
             <div className="mt-4 flex items-center justify-between">
               {selectedRoutine ? (
                 <button
-                  onClick={() => setSelectedRoutine(null)}
+                  onClick={() => {
+                    setSelectedRoutine(null);
+                    setSelectedRoutineKey(null);
+                  }}
                   className="text-sm text-[#d7c7a4] transition-all duration-200 active:scale-[0.98]"
                 >
                   Back
@@ -1021,6 +1375,7 @@ export default function HistoryPage(props) {
                 onClick={() => {
                   setShowLogOptions(false);
                   setSelectedRoutine(null);
+                  setSelectedRoutineKey(null);
                   setSelectedDay(null);
                 }}
                 className="text-sm text-white/60 transition-all duration-200 active:scale-[0.98]"
