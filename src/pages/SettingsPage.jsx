@@ -1,10 +1,267 @@
-import { useState, useEffect } from "react";
-import { Trash2 } from "lucide-react";
-import { ArrowLeft } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Trash2, ImagePlus, ArrowLeft, ChevronDown, Undo2 } from "lucide-react";
 import { supabase } from "../supabaseClient";
-const deepCopy = (obj) => JSON.parse(JSON.stringify(obj));
+import { getExerciseImage } from "../exerciseImages";
+import {
+  uploadExerciseImage,
+  deleteExerciseImageByUrl,
+} from "../exerciseImageUpload";
+import WheelDial, {
+  buildRepValues,
+  buildWeightValues,
+} from "../components/WheelDial";
+import {
+  buildBandDialValues,
+  normalizeBandLabel,
+} from "../loggingModes";
+
+const LOGGING_MODES = [
+  { id: "load", label: "Load", loadLabel: "Weight", valueLabel: "Reps", showLoad: true },
+  { id: "bodyweight", label: "BW", loadLabel: "BW", valueLabel: "Reps", showLoad: false },
+  { id: "band", label: "Band", loadLabel: "Band", valueLabel: "Reps", showLoad: true },
+  { id: "time", label: "Time", loadLabel: "Load", valueLabel: "Secs", showLoad: true, loadOptional: true },
+];
+
+const BAND_WEIGHT_RE =
+  /^(white|grey|gray|black|red|blue|green|yellow|orange|purple|pink|light|heavy|med(ium)?)$/i;
+const BW_WEIGHT_RE = /^(bw|body\s*weight|bodyweight)$/i;
+
+function getLoggingModeMeta(mode) {
+  return LOGGING_MODES.find((item) => item.id === mode) || LOGGING_MODES[0];
+}
+
+function inferLoggingMode(exercise) {
+  if (exercise?.loggingMode && getLoggingModeMeta(exercise.loggingMode)) {
+    return exercise.loggingMode;
+  }
+
+  const name = String(exercise?.name || "").toLowerCase();
+  if (/(plank|hold|dead hang|hang|wall sit|isometric)/i.test(name)) {
+    return "time";
+  }
+
+  const weights = (exercise?.sets || [])
+    .map((set) => String(set?.weight ?? "").trim())
+    .filter(Boolean);
+
+  if (weights.length && weights.every((weight) => BW_WEIGHT_RE.test(weight))) {
+    return "bodyweight";
+  }
+
+  if (weights.length && weights.every((weight) => BAND_WEIGHT_RE.test(weight))) {
+    return "band";
+  }
+
+  return "load";
+}
+
+function createEmptySet(mode = "load", fromSet = null) {
+  if (fromSet) {
+    return {
+      weight: fromSet.weight ?? "",
+      reps: fromSet.reps ?? "",
+    };
+  }
+
+  return {
+    weight: mode === "bodyweight" ? "BW" : "",
+    reps: "",
+  };
+}
+
+function applyLoggingModeToSets(sets, mode) {
+  return (sets || []).map((set) => {
+    const next = { ...set, weight: set.weight ?? "", reps: set.reps ?? "" };
+    if (mode === "bodyweight") {
+      next.weight = "BW";
+    } else if (mode === "load" && BW_WEIGHT_RE.test(String(next.weight || "").trim())) {
+      next.weight = "";
+    }
+    return next;
+  });
+}
+
+function normalizeExerciseName(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function getPlannedLoad(set) {
+  return set?.weight ?? set?.plannedWeight ?? set?.actualWeight ?? "";
+}
+
+function getPlannedReps(set) {
+  return set?.reps ?? set?.targetReps ?? set?.actualReps ?? "";
+}
+
+function isBlankPrescription(exercise) {
+  const sets = exercise?.sets || [];
+  if (!sets.length) return true;
+
+  return sets.every((set) => {
+    const weight = String(getPlannedLoad(set) || "").trim();
+    const reps = String(getPlannedReps(set) ?? "").trim();
+    const weightIsPlaceholder = !weight || BW_WEIGHT_RE.test(weight);
+    return weightIsPlaceholder && !reps;
+  });
+}
+
+function summarizeExerciseSets(exercise) {
+  const sets = exercise?.sets || [];
+  const count = sets.length;
+  if (!count) return "No sets yet";
+
+  const mode = inferLoggingMode(exercise);
+  const loads = sets
+    .map((set) => String(getPlannedLoad(set) || "").trim())
+    .filter(Boolean);
+  const repsList = sets
+    .map((set) => String(getPlannedReps(set) ?? "").trim())
+    .filter(Boolean);
+
+  const uniqueLoads = [...new Set(loads)];
+  const uniqueReps = [...new Set(repsList)];
+
+  const loadPart =
+    uniqueLoads.length === 0
+      ? null
+      : uniqueLoads.length === 1
+        ? uniqueLoads[0]
+        : uniqueLoads.length <= 3
+          ? uniqueLoads.join("/")
+          : `${uniqueLoads[0]}…`;
+
+  let repsPart = null;
+  if (uniqueReps.length === 1) {
+    repsPart = uniqueReps[0];
+  } else if (uniqueReps.length > 1) {
+    const nums = uniqueReps.map(Number).filter((n) => Number.isFinite(n));
+    repsPart =
+      nums.length === uniqueReps.length
+        ? `${Math.min(...nums)}–${Math.max(...nums)}`
+        : uniqueReps.join("/");
+  }
+
+  const setLabel = `${count} ${count === 1 ? "set" : "sets"}`;
+
+  if (mode === "bodyweight") {
+    return repsPart ? `${setLabel} · BW × ${repsPart}` : `${setLabel} · BW`;
+  }
+
+  if (mode === "time") {
+    if (loadPart && repsPart) return `${setLabel} · ${loadPart} × ${repsPart}s`;
+    if (repsPart) return `${setLabel} · ${repsPart}s`;
+    return setLabel;
+  }
+
+  if (mode === "band") {
+    if (loadPart && repsPart) return `${setLabel} · ${loadPart} × ${repsPart}`;
+    if (loadPart) return `${setLabel} · ${loadPart}`;
+    return setLabel;
+  }
+
+  if (loadPart && repsPart) return `${setLabel} · ${loadPart} × ${repsPart}`;
+  if (loadPart) return `${setLabel} · ${loadPart}`;
+  if (repsPart) return `${setLabel} · ${repsPart} reps`;
+  return setLabel;
+}
+
+function findLatestHistoryExercise(history, exerciseName) {
+  const key = normalizeExerciseName(exerciseName);
+  if (!key) return null;
+
+  for (const workout of history || []) {
+    const match = (workout.exercises || []).find(
+      (ex) => normalizeExerciseName(ex.name) === key
+    );
+    if (match?.sets?.length) return { workout, exercise: match };
+  }
+
+  return null;
+}
+
+function setsFromHistoryExercise(historyExercise) {
+  return (historyExercise?.sets || []).map((set) => ({
+    weight: String(
+      set.actualWeight || set.plannedWeight || set.weight || ""
+    ).trim(),
+    reps: String(set.actualReps || set.targetReps || set.reps || "").trim(),
+  }));
+}
+
+function formatHistoryDate(workout) {
+  if (!workout?.date) return "last session";
+  try {
+    return new Date(workout.date).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return "last session";
+  }
+}
+
+function buildSettingsWeightDialValues(loggingMode, sets = []) {
+  const include = sets.map((set) => set?.weight);
+
+  if (loggingMode === "band") {
+    return buildBandDialValues(include);
+  }
+
+  if (loggingMode === "time") {
+    const numeric = buildWeightValues({ include });
+    return ["", "BW", ...numeric.filter((v) => v !== "0")];
+  }
+
+  return buildWeightValues({ include });
+}
+
+function buildSettingsRepDialValues(loggingMode, sets = []) {
+  return buildRepValues({
+    min: 0,
+    max: loggingMode === "time" ? 300 : 50,
+    include: sets.map((set) => set?.reps),
+  });
+}
+
+function EditorSection({ title, summary, open, onToggle, children }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-black/25 overflow-hidden">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-left active:scale-[0.99] transition"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-white/40">
+            {title}
+          </div>
+          {!open && summary ? (
+            <div className="mt-0.5 text-xs text-white/55 truncate">{summary}</div>
+          ) : null}
+        </div>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 text-white/45 transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+      {open ? <div className="border-t border-white/5 px-3 py-3">{children}</div> : null}
+    </div>
+  );
+}
+
 export default function SettingsPage(props) {
   const [isInitialized, setIsInitialized] = useState(false);
+  const [uploadingImageKey, setUploadingImageKey] = useState(null);
+  const [routineMenuOpen, setRoutineMenuOpen] = useState(false);
+  const imageInputRef = useRef(null);
+  const pendingImageTargetRef = useRef(null);
+  const routineMenuRef = useRef(null);
   const {
     data,
     setData, 
@@ -13,7 +270,7 @@ export default function SettingsPage(props) {
     selectedDay
   } = props;
 
- const [draftProgram, setDraftProgram] = useState({
+ const [draftProgram, setDraftProgramRaw] = useState({
   routines: [
     {
       name: "Routine 1",
@@ -26,6 +283,142 @@ export default function SettingsPage(props) {
     }
   ]
 });
+const undoStackRef = useRef([]);
+const coalesceGateRef = useRef(0);
+const exerciseUndoStacksRef = useRef({});
+const exerciseCoalesceGateRef = useRef({});
+const [canUndo, setCanUndo] = useState(false);
+const [exerciseUndoTick, setExerciseUndoTick] = useState(0);
+
+function exerciseUndoKey(routineIndex, dayIndex, exIndex) {
+  return `${routineIndex}:${dayIndex}:${exIndex}`;
+}
+
+function bumpExerciseUndoUi() {
+  Promise.resolve().then(() => {
+    setExerciseUndoTick((tick) => tick + 1);
+  });
+}
+
+function clearExerciseUndoStacks(prefix = null) {
+  if (!prefix) {
+    exerciseUndoStacksRef.current = {};
+    exerciseCoalesceGateRef.current = {};
+    bumpExerciseUndoUi();
+    return;
+  }
+
+  for (const key of Object.keys(exerciseUndoStacksRef.current)) {
+    if (key.startsWith(prefix)) delete exerciseUndoStacksRef.current[key];
+  }
+  for (const key of Object.keys(exerciseCoalesceGateRef.current)) {
+    if (key.startsWith(prefix)) delete exerciseCoalesceGateRef.current[key];
+  }
+  bumpExerciseUndoUi();
+}
+
+function recordExerciseUndoSnapshot(key, exercise, coalesce = false) {
+  if (!key || !exercise) return;
+
+  const now = Date.now();
+  const gate = exerciseCoalesceGateRef.current[key] || 0;
+  const shouldRecord = !coalesce || now >= gate;
+
+  if (shouldRecord) {
+    try {
+      const snapshot = JSON.stringify(exercise);
+      const stack = exerciseUndoStacksRef.current[key] || [];
+      if (stack[stack.length - 1] !== snapshot) {
+        stack.push(snapshot);
+        if (stack.length > 20) stack.shift();
+        exerciseUndoStacksRef.current[key] = stack;
+      }
+      bumpExerciseUndoUi();
+    } catch {
+      // ignore snapshot failures
+    }
+  }
+
+  exerciseCoalesceGateRef.current[key] = coalesce ? now + 800 : 0;
+}
+
+function canUndoExercise(dayIndex, exIndex) {
+  void exerciseUndoTick;
+  const key = exerciseUndoKey(activeRoutineIndex, dayIndex, exIndex);
+  return (exerciseUndoStacksRef.current[key] || []).length > 0;
+}
+
+function setDraftProgram(updater, options = {}) {
+  const coalesce = options.coalesce === true;
+
+  setDraftProgramRaw((prev) => {
+    const now = Date.now();
+    const shouldRecord = !coalesce || now >= coalesceGateRef.current;
+
+    if (shouldRecord) {
+      try {
+        const snapshot = JSON.stringify(prev);
+        const stack = undoStackRef.current;
+        if (stack[stack.length - 1] !== snapshot) {
+          stack.push(snapshot);
+          if (stack.length > 40) stack.shift();
+        }
+      } catch {
+        // ignore snapshot failures
+      }
+      Promise.resolve().then(() => {
+        setCanUndo(undoStackRef.current.length > 0);
+      });
+    }
+
+    coalesceGateRef.current = coalesce ? now + 800 : 0;
+
+    return typeof updater === "function" ? updater(prev) : updater;
+  });
+}
+
+function undoLastChange() {
+  const stack = undoStackRef.current;
+  if (!stack.length) return;
+
+  const confirmed = confirm(
+    "Undo the last change across the whole program?\n\nThis can affect other exercises, days, and routines — not just the one you were editing."
+  );
+  if (!confirmed) return;
+
+  try {
+    const previous = JSON.parse(stack.pop());
+    setCanUndo(stack.length > 0);
+    coalesceGateRef.current = 0;
+    // Global restore may not match per-exercise stacks; clear them.
+    clearExerciseUndoStacks();
+    setDraftProgramRaw(previous);
+  } catch {
+    setCanUndo(stack.length > 0);
+  }
+}
+
+function undoExerciseAt(dayIndex, exIndex) {
+  const key = exerciseUndoKey(activeRoutineIndex, dayIndex, exIndex);
+  const stack = exerciseUndoStacksRef.current[key] || [];
+  if (!stack.length) return;
+
+  try {
+    const previousExercise = JSON.parse(stack.pop());
+    bumpExerciseUndoUi();
+
+    setDraftProgram((prev) => {
+      const updated = JSON.parse(JSON.stringify(prev));
+      const exercises =
+        updated.routines?.[activeRoutineIndex]?.days?.[dayIndex]?.exercises;
+      if (!exercises?.[exIndex]) return prev;
+      exercises[exIndex] = previousExercise;
+      return updated;
+    });
+  } catch {
+    bumpExerciseUndoUi();
+  }
+}
 
 useEffect(() => {
   if (!data || isInitialized) return;
@@ -47,7 +440,11 @@ routinesArray.forEach(r => {
   
   cloned.routines = routinesArray;
 
-  setDraftProgram(cloned);
+  undoStackRef.current = [];
+  setCanUndo(false);
+  coalesceGateRef.current = 0;
+  clearExerciseUndoStacks();
+  setDraftProgramRaw(cloned);
   setIsInitialized(true); // ✅ runs ONLY once
 }, [data, isInitialized]);
 
@@ -108,15 +505,233 @@ useEffect(() => {
     setActiveRoutineIndex(selectedRoutine);
   }
 }, [selectedRoutine]);
-console.log("DATA:", data);
-console.log("DRAFT:", draftProgram);
+
+useEffect(() => {
+  if (!routineMenuOpen) return;
+
+  function handlePointerDown(event) {
+    if (!routineMenuRef.current?.contains(event.target)) {
+      setRoutineMenuOpen(false);
+    }
+  }
+
+  function handleKeyDown(event) {
+    if (event.key === "Escape") setRoutineMenuOpen(false);
+  }
+
+  document.addEventListener("mousedown", handlePointerDown);
+  document.addEventListener("keydown", handleKeyDown);
+  return () => {
+    document.removeEventListener("mousedown", handlePointerDown);
+    document.removeEventListener("keydown", handleKeyDown);
+  };
+}, [routineMenuOpen]);
 
 const routinesArray = draftProgram?.routines || [];
 const selectedRoutineData =
   routinesArray[activeRoutineIndex] || null;
+const selectedRoutineName =
+  selectedRoutineData?.name || `Routine ${activeRoutineIndex + 1}`;
+
+function addRoutine() {
+  const copy = confirm("Copy last routine?");
+
+  setDraftProgram((prev) => {
+    const updated = JSON.parse(JSON.stringify(prev));
+    const list = updated.routines;
+    let newRoutine;
+
+    if (copy && list.length > 0) {
+      newRoutine = JSON.parse(JSON.stringify(list[list.length - 1]));
+      newRoutine.name = `${newRoutine.name || "Routine"} (copy)`;
+    } else {
+      newRoutine = {
+        name: `Routine ${list.length + 1}`,
+        days: [{ name: "New Day", exercises: [] }],
+      };
+    }
+
+    list.push(newRoutine);
+    return updated;
+  });
+
+  setActiveRoutineIndex(routinesArray.length);
+  setRoutineMenuOpen(false);
+}
+
+function deleteActiveRoutine() {
+  const list = draftProgram.routines;
+
+  if (list.length === 1) {
+    alert("At least one routine is required.");
+    return;
+  }
+
+  if (!confirm(`Delete ${selectedRoutineName}?`)) return;
+
+  const updated = { ...draftProgram };
+  const updatedRoutinesArray = [...updated.routines];
+  updatedRoutinesArray.splice(activeRoutineIndex, 1);
+  updated.routines = updatedRoutinesArray;
+  setDraftProgram(updated);
+  setActiveRoutineIndex((prev) => Math.max(0, prev - 1));
+  setRoutineMenuOpen(false);
+}
+
+function updateExerciseAt(dayIndex, exIndex, updater, options = {}) {
+  const coalesce = options.coalesce === true;
+  const key = exerciseUndoKey(activeRoutineIndex, dayIndex, exIndex);
+
+  setDraftProgram((prev) => {
+    const current =
+      prev?.routines?.[activeRoutineIndex]?.days?.[dayIndex]?.exercises?.[
+        exIndex
+      ];
+    if (!current) return prev;
+
+    recordExerciseUndoSnapshot(key, current, coalesce);
+
+    const updated = JSON.parse(JSON.stringify(prev));
+    const exercise =
+      updated.routines[activeRoutineIndex].days[dayIndex].exercises[exIndex];
+    updater(exercise);
+    return updated;
+  }, options);
+}
 
 const [expandedDayIndex, setExpandedDayIndex] = useState(null);
 const [expandedExercises, setExpandedExercises] = useState({});
+const [editorSections, setEditorSections] = useState({});
+
+const EDITOR_SECTION_DEFAULTS = {
+  lastSession: false,
+  mode: false,
+};
+
+function isEditorSectionOpen(exerciseKey, section) {
+  const current = editorSections[exerciseKey]?.[section];
+  if (current === undefined) return EDITOR_SECTION_DEFAULTS[section] ?? false;
+  return current;
+}
+
+function toggleEditorSection(exerciseKey, section) {
+  setEditorSections((prev) => {
+    const current = prev[exerciseKey] || {};
+    const open = current[section] ?? EDITOR_SECTION_DEFAULTS[section] ?? false;
+    return {
+      ...prev,
+      [exerciseKey]: {
+        ...current,
+        [section]: !open,
+      },
+    };
+  });
+}
+
+useEffect(() => {
+  function handleKeyDown(event) {
+    const key = String(event.key || "").toLowerCase();
+    const wantsUndo =
+      (event.ctrlKey || event.metaKey) &&
+      !event.shiftKey &&
+      key === "z";
+    if (!wantsUndo) return;
+
+    const tag = event.target?.tagName;
+    if (
+      tag === "INPUT" ||
+      tag === "TEXTAREA" ||
+      event.target?.isContentEditable
+    ) {
+      return;
+    }
+
+    const openKeys = Object.keys(expandedExercises || {}).filter(
+      (k) => expandedExercises[k]
+    );
+    if (openKeys.length === 1) {
+      const [dayIndex, exIndex] = openKeys[0].split("-").map(Number);
+      if (
+        Number.isFinite(dayIndex) &&
+        Number.isFinite(exIndex) &&
+        canUndoExercise(dayIndex, exIndex)
+      ) {
+        event.preventDefault();
+        undoExerciseAt(dayIndex, exIndex);
+        return;
+      }
+    }
+
+    if (!canUndo) return;
+    event.preventDefault();
+    undoLastChange();
+  }
+
+  window.addEventListener("keydown", handleKeyDown);
+  return () => window.removeEventListener("keydown", handleKeyDown);
+}, [canUndo, exerciseUndoTick, expandedExercises, activeRoutineIndex]);
+
+function openExerciseImagePicker(dayIndex, exIndex) {
+  pendingImageTargetRef.current = { dayIndex, exIndex };
+  imageInputRef.current?.click();
+}
+
+async function handleExerciseImageSelected(event) {
+  const file = event.target.files?.[0];
+  const target = pendingImageTargetRef.current;
+  event.target.value = "";
+  pendingImageTargetRef.current = null;
+
+  if (!file || !target) return;
+
+  const { dayIndex, exIndex } = target;
+  const key = `${dayIndex}-${exIndex}`;
+  const exercise =
+    draftProgram?.routines?.[activeRoutineIndex]?.days?.[dayIndex]
+      ?.exercises?.[exIndex];
+
+  if (!exercise) return;
+
+  setUploadingImageKey(key);
+
+  try {
+    const previousUrl = exercise.image;
+    const { url } = await uploadExerciseImage(file, {
+      name: exercise.name || "exercise",
+    });
+
+    updateExerciseAt(dayIndex, exIndex, (ex) => {
+      ex.image = url;
+    });
+
+    if (previousUrl && previousUrl !== url) {
+      await deleteExerciseImageByUrl(previousUrl);
+    }
+  } catch (err) {
+    console.error("Exercise image upload failed", err);
+    alert(err?.message || "Image upload failed");
+  } finally {
+    setUploadingImageKey(null);
+  }
+}
+
+async function removeExerciseImage(dayIndex, exIndex) {
+  const exercise =
+    draftProgram?.routines?.[activeRoutineIndex]?.days?.[dayIndex]
+      ?.exercises?.[exIndex];
+  if (!exercise?.image) return;
+
+  if (!confirm("Remove this custom exercise image?")) return;
+
+  const previousUrl = exercise.image;
+
+  updateExerciseAt(dayIndex, exIndex, (ex) => {
+    delete ex.image;
+  });
+
+  await deleteExerciseImageByUrl(previousUrl);
+}
+
 const exerciseLibrary = [
   ...new Set(
     draftProgram?.routines || []
@@ -163,9 +778,15 @@ async function handleUploadToCloud() {
 
 return (    
     <>
-   <div className="mb-4 flex items-center gap-3">
-
-  {/* Back */}
+  <input
+    ref={imageInputRef}
+    type="file"
+    accept="image/*"
+    className="hidden"
+    onChange={handleExerciseImageSelected}
+  />
+<div className="pt-5 mb-3 grid grid-cols-[auto_1fr_auto_auto] items-center gap-2">
+  {/* LEFT — Back */}
   <button
     onClick={() => {
       if (props.settingsSource === "preview") {
@@ -174,122 +795,144 @@ return (
         props.setActiveScreen("landing");
       }
     }}
-    className="shrink-0 inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-black/80 backdrop-blur-md text-white border border-white/10 hover:bg-black/70 active:scale-[0.97] transition"
+    className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-black/60 backdrop-blur-md text-white text-base border border-white/10 hover:bg-black/70 active:scale-[0.97] transition"
   >
-    <ArrowLeft size={16} />
+    <ArrowLeft size={10} />
   </button>
 
-  {/* Routine Tabs */}
-  <div className="flex items-center gap-3 overflow-x-auto whitespace-nowrap flex-1">
-    {(draftProgram?.routines || []).map((routine, index) => (
-      <div
-        key={index}
-        className={`shrink-0 px-4 py-3 rounded-2xl ${
-          activeRoutineIndex === index
-            ? "bg-purple-600"
-            : "bg-black/80 backdrop-blur-md"
-        }`}
-      >
+  {/* CENTER — Selected routine dropdown */}
+  <div className="relative min-w-0" ref={routineMenuRef}>
+    <div className="w-full inline-flex items-center gap-2 pl-2.5 pr-2 py-1.5 rounded-xl text-sm text-white/90 border border-white/15 bg-black/30">
+      <span className="h-7 w-[3px] shrink-0 rounded-full bg-[#c7a86a]/80" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-[10px] uppercase tracking-[0.14em] text-white/40 leading-none mb-0.5">
+          Routine
+        </span>
         <input
-          value={routine.name ?? ""}
-          onClick={() => setActiveRoutineIndex(index)}
+          value={selectedRoutineData?.name ?? ""}
           onChange={(e) => {
-            const updated = { ...draftProgram };
-            const routinesArray = [...updated.routines];
-
-            routinesArray[index].name = e.target.value;
-
-            updated.routines = routinesArray;
-
-            setDraftProgram(updated);
+            const value = e.target.value;
+            setDraftProgram((prev) => {
+              const updated = JSON.parse(JSON.stringify(prev));
+              if (!updated.routines[activeRoutineIndex]) return prev;
+              updated.routines[activeRoutineIndex].name = value;
+              return updated;
+            }, { coalesce: true });
           }}
           onBlur={(e) => {
             if (!e.target.value.trim()) {
-              const updated = { ...draftProgram };
-              const routinesArray = [...updated.routines];
-
-              routinesArray[index].name = `Routine ${index + 1}`;
-
-              updated.routines = routinesArray;
-
-              setDraftProgram(updated);
+              setDraftProgram((prev) => {
+                const updated = JSON.parse(JSON.stringify(prev));
+                if (!updated.routines[activeRoutineIndex]) return prev;
+                updated.routines[activeRoutineIndex].name = `Routine ${
+                  activeRoutineIndex + 1
+                }`;
+                return updated;
+              });
             }
           }}
-          className="bg-transparent text-white text-sm outline-none text-center min-w-[160px]"
+          onClick={(e) => e.stopPropagation()}
+          className="block w-full truncate bg-transparent font-semibold text-[#f0e6d0] outline-none"
         />
+      </span>
+      <button
+        type="button"
+        onClick={() => setRoutineMenuOpen((open) => !open)}
+        aria-haspopup="listbox"
+        aria-expanded={routineMenuOpen}
+        className="shrink-0 rounded-lg p-1.5 text-white/60 hover:bg-white/5 hover:text-white/80 active:scale-[0.97] transition"
+      >
+        <ChevronDown
+          size={16}
+          className={`transition-transform ${
+            routineMenuOpen ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+    </div>
+
+    {routineMenuOpen && (
+      <div
+        role="listbox"
+        className="absolute left-0 right-0 top-[calc(100%+6px)] z-40 overflow-hidden rounded-xl border border-white/15 bg-black/95 backdrop-blur-md shadow-[0_12px_40px_rgba(0,0,0,0.55)]"
+      >
+        <div className="max-h-56 overflow-y-auto py-1">
+          {routinesArray.length <= 1 ? (
+            <div className="px-3 py-3 text-xs text-white/45">
+              No other routines available
+            </div>
+          ) : (
+            routinesArray.map((routine, index) => {
+              const isSelected = index === activeRoutineIndex;
+              return (
+                <button
+                  key={index}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onClick={() => {
+                    setActiveRoutineIndex(index);
+                    setExpandedDayIndex(null);
+                    setExpandedExercises({});
+                    setRoutineMenuOpen(false);
+                  }}
+                  className={`w-full px-3 py-2.5 text-left text-sm transition ${
+                    isSelected
+                      ? "bg-[#c7a86a]/20 text-[#d7c7a4]"
+                      : "text-white/85 hover:bg-white/5"
+                  }`}
+                >
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="truncate">
+                      {routine.name || `Routine ${index + 1}`}
+                    </span>
+                    {isSelected && (
+                      <span className="shrink-0 text-[#c7a86a]">✓</span>
+                    )}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        <div className="border-t border-white/10">
+          <button
+            type="button"
+            onClick={addRoutine}
+            className="w-full px-3 py-2.5 text-left text-sm text-[#d7c7a4] hover:bg-white/5 active:scale-[0.99] transition"
+          >
+            + Add routine
+          </button>
+        </div>
       </div>
-    ))}
-
-    <button
-      onClick={() => {
-        const copy = confirm("Copy last routine's routine?");
-
-        setDraftProgram((prev) => {
-          const updated = JSON.parse(JSON.stringify(prev));
-
-          const routinesArray = updated.routines;
-
-          let newRoutine;
-
-          if (copy && routinesArray.length > 0) {
-            newRoutine = JSON.parse(
-              JSON.stringify(routinesArray[routinesArray.length - 1])
-            );
-          } else {
-            newRoutine = {
-              name: `Routine ${routinesArray.length + 1}`,
-              days: [
-                {
-                  name: "New Day",
-                  exercises: []
-                }
-              ]
-            };
-          }
-
-          routinesArray.push(newRoutine);
-
-          return updated;
-        });
-      }}
-      className="shrink-0 px-4 py-2 rounded-2xl bg-black/80 backdrop-blur-md text-white/70 transition-all duration-200 active:scale-[0.98]"
-    >
-      +
-    </button>
-
-    <button
-      onClick={() => {
-        const routinesArray = draftProgram.routines;
-
-        if (routinesArray.length === 1) {
-          alert("At least one routine is required.");
-          return;
-        }
-
-        const routineName =
-          routinesArray[activeRoutineIndex]?.name ||
-          `Routine ${activeRoutineIndex + 1}`;
-
-        if (!confirm(`Delete ${routineName}?`)) return;
-
-        const updated = { ...draftProgram };
-        const updatedRoutinesArray = [...updated.routines];
-
-        updatedRoutinesArray.splice(activeRoutineIndex, 1);
-
-        updated.routines = updatedRoutinesArray;
-
-        setDraftProgram(updated);
-
-        setActiveRoutineIndex((prev) =>
-          Math.max(0, prev - 1)
-        );
-      }}
-      className="shrink-0 text-red-400 hover:text-red-300 transition-all duration-200 active:scale-[0.98]"
-    >
-      <Trash2 size={22} />
-    </button>
+    )}
   </div>
+
+  {/* Undo last program edit */}
+  <button
+    type="button"
+    onClick={undoLastChange}
+    disabled={!canUndo}
+    title="Undo last change across the whole program"
+    className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-2xl backdrop-blur-md border transition active:scale-[0.97] ${
+      canUndo
+        ? "bg-black/60 text-[#d7c7a4] border-[#c7a86a55] hover:bg-black/70"
+        : "bg-black/40 text-white/25 border-white/10 cursor-not-allowed"
+    }`}
+  >
+    <Undo2 size={15} />
+    <span className="text-xs font-medium hidden sm:inline">Undo all</span>
+  </button>
+
+  {/* RIGHT — Delete routine */}
+  <button
+    type="button"
+    onClick={deleteActiveRoutine}
+    className="inline-flex items-center justify-center px-3 py-2 rounded-2xl bg-black/60 backdrop-blur-md text-red-400 border border-white/10 hover:bg-black/70 hover:text-red-300 active:scale-[0.97] transition"
+  >
+    <Trash2 size={16} />
+  </button>
 </div>
 
 {!routinesArray.length ? (
@@ -313,8 +956,8 @@ return (
       className={`group rounded-3xl border transition-all duration-300 overflow-hidden cursor-pointer active:scale-[0.992]
   ${
     expandedDayIndex === dayIndex
-      ? "border-purple-500/50 bg-zinc-950 shadow-[0_0_30px_rgba(168,85,247,0.22)]"
-      : "border-white/10 bg-zinc-950/92 hover:border-purple-500/30"
+      ? "border-[#c7a86a66] bg-black/40 backdrop-blur-md shadow-[0_0_28px_rgba(199,168,106,0.28)]"
+      : "border-white/10 bg-black/40 backdrop-blur-md shadow-[0_0_12px_rgba(0,0,0,0.25)] hover:border-[#c7a86a40]"
   }`}
         onClick={() =>
           setExpandedDayIndex(
@@ -325,7 +968,7 @@ return (
         <div className="flex items-center gap-3 px-5 py-5">
 <div className="flex items-center gap-4 flex-1">
 
-  <div className="text-purple-400 text-sm font-semibold tracking-wide">
+  <div className="w-7 h-7 shrink-0 flex items-center justify-center rounded-full border border-[#c7a86a40] text-[11px] font-semibold text-[#d7c7a4]/70">
     {String(dayIndex + 1).padStart(2, "0")}
   </div>
 
@@ -334,29 +977,22 @@ return (
     value={day.name ?? ""}
     onClick={(e) => e.stopPropagation()}
     onChange={(e) => {
-      const updated = { ...draftProgram };
-      const routinesArray = [...updated.routines];
-
-      routinesArray[activeRoutineIndex]
-        .days[dayIndex]
-        .name = e.target.value;
-
-      updated.routines = routinesArray;
-
-      setDraftProgram(updated);
+      const value = e.target.value;
+      setDraftProgram((prev) => {
+        const updated = JSON.parse(JSON.stringify(prev));
+        updated.routines[activeRoutineIndex].days[dayIndex].name = value;
+        return updated;
+      }, { coalesce: true });
     }}
     onBlur={(e) => {
       if (!e.target.value.trim()) {
-        const updated = { ...draftProgram };
-        const routinesArray = [...updated.routines];
-
-        routinesArray[activeRoutineIndex]
-          .days[dayIndex]
-          .name = `Day ${dayIndex + 1}`;
-
-        updated.routines = routinesArray;
-
-        setDraftProgram(updated);
+        setDraftProgram((prev) => {
+          const updated = JSON.parse(JSON.stringify(prev));
+          updated.routines[activeRoutineIndex].days[dayIndex].name = `Day ${
+            dayIndex + 1
+          }`;
+          return updated;
+        });
       }
     }}
     className="bg-transparent text-white text-lg font-semibold outline-none w-full"
@@ -437,16 +1073,84 @@ setDraftProgram((prev) => {
 </div>
 <div className="px-5 pb-4 flex items-center justify-between text-xs text-white/35">
   <div>
-    {day.exercises?.length || 0} exercises
+    {String(day.mode || "").toLowerCase() === "amrap"
+      ? `AMRAP ${day.amrapDurationMinutes || 20} min · ${day.exercises?.length || 0} in circuit`
+      : `${day.exercises?.length || 0} exercises`}
   </div>
 
-  <div className="text-purple-400/70">
+  <div className="text-[#c7a86a]/70">
     {expandedDayIndex === dayIndex ? "Collapse" : "Expand"}
   </div>
 </div>
         {/* Expanded section */}
         {expandedDayIndex === dayIndex && (
   <div className="mt-3 space-y-2 animate-fadeSlide">
+<div
+  className="mx-3 mb-2 rounded-2xl border border-white/10 bg-black/30 p-3"
+  onClick={(e) => e.stopPropagation()}
+>
+  <div className="mb-2 text-[11px] uppercase tracking-[0.2em] text-white/45">
+    Day type
+  </div>
+  <div className="mb-3 flex gap-2">
+    {[
+      { id: "straight", label: "Straight sets" },
+      { id: "amrap", label: "AMRAP circuit" },
+    ].map((option) => {
+      const selected = String(day.mode || "straight") === option.id;
+      return (
+        <button
+          key={option.id}
+          type="button"
+          onClick={() => {
+            setDraftProgram((prev) => {
+              const updated = JSON.parse(JSON.stringify(prev));
+              const target =
+                updated.routines[activeRoutineIndex].days[dayIndex];
+              target.mode = option.id;
+              if (option.id === "amrap" && !target.amrapDurationMinutes) {
+                target.amrapDurationMinutes = 20;
+              }
+              return updated;
+            });
+          }}
+          className={`flex-1 rounded-xl border px-3 py-2 text-sm transition ${
+            selected
+              ? "border-[#c7a86a66] bg-[#c7a86a22] text-[#f5e7c8]"
+              : "border-white/10 bg-black/40 text-white/60"
+          }`}
+        >
+          {option.label}
+        </button>
+      );
+    })}
+  </div>
+  {String(day.mode || "").toLowerCase() === "amrap" && (
+    <div className="flex items-center gap-3">
+      <label className="text-sm text-white/60">Duration (min)</label>
+      <input
+        type="number"
+        min={1}
+        max={180}
+        value={day.amrapDurationMinutes ?? 20}
+        onChange={(e) => {
+          const value = Math.max(1, Number(e.target.value) || 1);
+          setDraftProgram((prev) => {
+            const updated = JSON.parse(JSON.stringify(prev));
+            updated.routines[activeRoutineIndex].days[
+              dayIndex
+            ].amrapDurationMinutes = value;
+            return updated;
+          }, { coalesce: true });
+        }}
+        className="w-20 rounded-lg border border-white/10 bg-black/50 px-2 py-1.5 text-center text-sm text-white"
+      />
+      <div className="text-xs text-white/40">
+        Exercises below are one circuit
+      </div>
+    </div>
+  )}
+</div>
 {day.exercises?.map((exercise, exIndex) => (
   <div
   key={exIndex}
@@ -465,49 +1169,122 @@ setDraftProgram((prev) => {
   }}
   className="flex items-start gap-3 p-4 cursor-pointer"
 >
-  <div className="flex-1 transition-transform duration-150 active:scale-[0.985]">
+  {(() => {
+    const imageKey = `${dayIndex}-${exIndex}`;
+    const isUploading = uploadingImageKey === imageKey;
+    const previewSrc = getExerciseImage(exercise);
+    const hasCustomImage = Boolean(exercise.image);
+
+    return (
+      <div
+        className="shrink-0 w-14 flex flex-col items-center gap-1"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          disabled={isUploading}
+          onClick={() => openExerciseImagePicker(dayIndex, exIndex)}
+          className="relative h-14 w-14 overflow-hidden rounded-xl border border-white/10 bg-black/50 transition active:scale-[0.97] disabled:opacity-60"
+          title={hasCustomImage ? "Replace image" : "Upload image"}
+        >
+          {previewSrc ? (
+            <img
+              src={previewSrc}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center text-white/35">
+              <ImagePlus size={18} />
+            </span>
+          )}
+          <span className="absolute inset-x-0 bottom-0 bg-black/65 py-0.5 text-center text-[9px] uppercase tracking-wide text-white/80">
+            {isUploading ? "..." : hasCustomImage ? "Change" : "Add"}
+          </span>
+        </button>
+        {hasCustomImage && (
+          <button
+            type="button"
+            disabled={isUploading}
+            onClick={() => removeExerciseImage(dayIndex, exIndex)}
+            className="text-[10px] text-red-300/80 hover:text-red-300 disabled:opacity-50"
+          >
+            Remove
+          </button>
+        )}
+      </div>
+    );
+  })()}
+  <div className="min-w-0 flex-1 transition-transform duration-150 active:scale-[0.985]">
     <input
-  type="text"
-  value={exercise.name ?? ""}
-  onClick={(e) => e.stopPropagation()}
- onChange={(e) => {
-  const value = e.target.value;
+      type="text"
+      value={exercise.name ?? ""}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        const value = e.target.value;
+        updateExerciseAt(
+          dayIndex,
+          exIndex,
+          (ex) => {
+            ex.name = value;
+          },
+          { coalesce: true }
+        );
+      }}
+      onBlur={(e) => {
+        setTimeout(() => {
+          const rawName = e.target.value.trim();
+          const nextName = rawName || "New Exercise";
 
-  setDraftProgram((prev) => {
-    const updated = JSON.parse(JSON.stringify(prev));
+          updateExerciseAt(dayIndex, exIndex, (ex) => {
+            ex.name = nextName;
 
-    updated.routines[activeRoutineIndex]
-      .days[dayIndex]
-      .exercises[exIndex]
-      .name = value;
+            if (!rawName || rawName === "New Exercise") return;
+            if (!isBlankPrescription(ex)) return;
 
-    return updated;
-  });
-}}
-onBlur={(e) => {
-  setTimeout(() => {
-    if (!e.target.value.trim()) {
-      const updated = { ...draftProgram };
-      const routinesArray = [...updated.routines];
+            const latest = findLatestHistoryExercise(
+              workoutHistory,
+              nextName
+            );
+            if (!latest) return;
 
-      routinesArray[activeRoutineIndex]
-        .days[dayIndex]
-        .exercises[exIndex]
-        .name = "New Exercise";
+            const prefills = setsFromHistoryExercise(latest.exercise);
+            if (!prefills.length) return;
 
-      updated.routines = routinesArray;
-      setDraftProgram(updated);
-    }
+            ex.sets = prefills;
+            ex.loggingMode = inferLoggingMode({
+              ...ex,
+              sets: prefills,
+              loggingMode: undefined,
+            });
+          });
 
-    setSearchTerm(""); // 🔴 ADD THIS
-  }, 150);
-}}
-  className="bg-transparent text-white text-lg font-semibold outline-none w-full"
-/>
-</div>
-<div className="text-xs text-white/40 px-1">
-  {expandedExercises[`${dayIndex}-${exIndex}`] ? "▲" : "▼"}
-</div>
+          setSearchTerm("");
+        }, 150);
+      }}
+      className="bg-transparent text-white text-lg font-semibold outline-none w-full"
+    />
+    <div className="mt-1 text-[11px] text-white/40 leading-snug">
+      {summarizeExerciseSets(exercise)}
+      {!expandedExercises[`${dayIndex}-${exIndex}`] &&
+        (() => {
+          const latest = findLatestHistoryExercise(
+            workoutHistory,
+            exercise.name
+          );
+          if (!latest || !isBlankPrescription(exercise)) return null;
+          return (
+            <span className="text-[#c7a86a]/70">
+              {" "}
+              · last {formatHistoryDate(latest.workout)} available
+            </span>
+          );
+        })()}
+    </div>
+  </div>
+  <div className="text-xs text-white/40 px-1 pt-1">
+    {expandedExercises[`${dayIndex}-${exIndex}`] ? "▲" : "▼"}
+  </div>
 <button
   onClick={(e) => {
     e.stopPropagation();
@@ -524,6 +1301,7 @@ onBlur={(e) => {
       [exercises[exIndex], exercises[exIndex - 1]];
 
     updated.routines = routinesArray;
+    clearExerciseUndoStacks(`${activeRoutineIndex}:${dayIndex}:`);
     setDraftProgram(updated);
   }}
   className="text-xs text-white/50 hover:text-white transition-all duration-200 active:scale-[0.98]"
@@ -547,7 +1325,7 @@ onBlur={(e) => {
       [exercises[exIndex], exercises[exIndex + 1]];
 
     updated.routines = routinesArray;
-
+    clearExerciseUndoStacks(`${activeRoutineIndex}:${dayIndex}:`);
     setDraftProgram(updated);
   }}
   className="text-xs text-white/50 hover:text-white transition-all duration-200 active:scale-[0.98]"
@@ -561,21 +1339,21 @@ onBlur={(e) => {
 
   if (!confirm("Delete this exercise and all its sets?")) return;
 
+  const currentExercises =
+    draftProgram?.routines?.[activeRoutineIndex]?.days?.[dayIndex]
+      ?.exercises || [];
+  if (currentExercises.length === 1) {
+    alert("At least one exercise is required.");
+    return;
+  }
+
+  clearExerciseUndoStacks(`${activeRoutineIndex}:${dayIndex}:`);
   setDraftProgram((prev) => {
     const updated = JSON.parse(JSON.stringify(prev));
-
-    const exercises =
-      updated.routines[activeRoutineIndex]
-        .days[dayIndex]
-        .exercises;
-
-    if (exercises.length === 1) {
-      alert("At least one exercise is required.");
-      return prev;
-    }
-
-    exercises.splice(exIndex, 1);
-
+    updated.routines[activeRoutineIndex].days[dayIndex].exercises.splice(
+      exIndex,
+      1
+    );
     return updated;
   });
 }}
@@ -585,127 +1363,255 @@ onBlur={(e) => {
 </button>
     </div>
 
-{expandedExercises[`${dayIndex}-${exIndex}`] && (
-  <div className="mt-5 space-y-3 px-4 pb-4 animate-fadeSlide">
-  {exercise.sets?.map((set, setIndex) => (
-    <div
-  key={setIndex}
-  className="grid grid-cols-[50px_minmax(0,1fr)_minmax(0,1fr)_40px] items-center gap-3 rounded-2xl border border-white/5 bg-black/30 px-3 py-3 transition-all duration-150 active:scale-[0.99]"
->
-  {/* Set Number */}
-  <div className="flex items-center justify-center">
-    <div className="w-9 h-9 rounded-full border border-purple-500/20 bg-purple-500/5 flex items-center justify-center text-sm font-semibold text-purple-300">
-      {setIndex + 1}
-    </div>
-  </div>
+{expandedExercises[`${dayIndex}-${exIndex}`] && (() => {
+  const exerciseKey = `${dayIndex}-${exIndex}`;
+  const loggingMode = inferLoggingMode(exercise);
+  const modeMeta = getLoggingModeMeta(loggingMode);
+  const sets = exercise.sets || [];
+  const latestHistory = findLatestHistoryExercise(
+    workoutHistory,
+    exercise.name
+  );
+  const historySets = latestHistory
+    ? setsFromHistoryExercise(latestHistory.exercise)
+    : [];
 
-  {/* Weight */}
-  <div>
-    <div className="w-full text-center text-[10px] uppercase tracking-wider text-white/30 mb-1">
-      Weight/Band
-    </div>
+  const exerciseCanUndo = canUndoExercise(dayIndex, exIndex);
+  const modeSummary = modeMeta.label;
+  const weightDialValues = buildSettingsWeightDialValues(loggingMode, sets);
+  const repDialValues = buildSettingsRepDialValues(loggingMode, sets);
+  const loadUnit =
+    loggingMode === "band" || loggingMode === "time" ? "" : "kg";
+  const valueUnit = loggingMode === "time" ? "s" : "";
 
-    <input
-      type="text"
-      value={set.weight || ""}
-      onClick={(e) => e.stopPropagation()}
-      onChange={(e) => {
-        const value = e.target.value;
-
-        setDraftProgram((prev) => {
-          const updated = JSON.parse(JSON.stringify(prev));
-
-          updated.routines[activeRoutineIndex]
-            .days[dayIndex]
-            .exercises[exIndex]
-            .sets[setIndex]
-            .weight = value;
-
-          return updated;
-        });
-      }}
-      className="no-spinner block w-full rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-white text-center"
-    />
-  </div>
-
-  {/* Reps */}
-  <div>
-    <div className="w-full text-center text-[10px] uppercase tracking-wider text-white/30 mb-1">
-      Reps/Secs
-    </div>
-
-    <input
-      type="number"
-      value={set.reps || ""}
-      onClick={(e) => e.stopPropagation()}
-      onChange={(e) => {
-        const value = e.target.value;
-
-        setDraftProgram((prev) => {
-          const updated = JSON.parse(JSON.stringify(prev));
-
-          updated.routines[activeRoutineIndex]
-            .days[dayIndex]
-            .exercises[exIndex]
-            .sets[setIndex]
-            .reps = Number(value);
-
-          return updated;
-        });
-      }}
-      className="no-spinner block w-full rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-white text-center"
-    />
-  </div>
-
-  {/* Delete */}
-  <button
-    onClick={(e) => {
-      e.stopPropagation();
-
-      if (!confirm("Delete this set?")) return;
-
-      setDraftProgram((prev) => {
-        const updated = JSON.parse(JSON.stringify(prev));
-
-        updated.routines[activeRoutineIndex]
-          .days[dayIndex]
-          .exercises[exIndex]
-          .sets.splice(setIndex, 1);
-
-        return updated;
-      });
-    }}
-    className="flex items-center justify-center text-red-400 hover:text-red-300"
+  return (
+  <div
+    className="mt-3 space-y-2 px-4 pb-4 animate-fadeSlide"
+    onClick={(e) => e.stopPropagation()}
   >
-    <Trash2 size={15} />
-  </button>
-</div>
-  ))}
-  <button
-  onClick={(e) => {
-    e.stopPropagation();
+    <div className="flex items-center justify-between gap-2 px-0.5">
+      <div className="text-[10px] uppercase tracking-[0.14em] text-white/35">
+        Exercise edits
+      </div>
+      <button
+        type="button"
+        onClick={() => undoExerciseAt(dayIndex, exIndex)}
+        disabled={!exerciseCanUndo}
+        className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition active:scale-[0.97] ${
+          exerciseCanUndo
+            ? "border-[#c7a86a55] bg-[#c7a86a12] text-[#d7c7a4] hover:bg-[#c7a86a]/15"
+            : "border-white/10 bg-black/30 text-white/25 cursor-not-allowed"
+        }`}
+      >
+        <Undo2 size={13} />
+        Undo
+      </button>
+    </div>
 
-    setDraftProgram((prev) => {
-  const updated = JSON.parse(JSON.stringify(prev));
+    {latestHistory && historySets.length > 0 && (
+      <EditorSection
+        title="Last session"
+        summary={`${formatHistoryDate(latestHistory.workout)} · ${summarizeExerciseSets({
+          name: exercise.name,
+          sets: historySets,
+        })}`}
+        open={isEditorSectionOpen(exerciseKey, "lastSession")}
+        onToggle={() => toggleEditorSection(exerciseKey, "lastSession")}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            const blank = isBlankPrescription(exercise);
+            if (
+              !blank &&
+              !confirm(
+                `Replace current sets with last session (${formatHistoryDate(
+                  latestHistory.workout
+                )})?`
+              )
+            ) {
+              return;
+            }
 
-  updated.routines[activeRoutineIndex]
-    .days[dayIndex]
-    .exercises[exIndex]
-    .sets.push({ reps: "", weight: "" });
+            updateExerciseAt(dayIndex, exIndex, (ex) => {
+              ex.sets = historySets.map((set) => ({ ...set }));
+              ex.loggingMode = inferLoggingMode({
+                ...ex,
+                sets: historySets,
+                loggingMode: undefined,
+              });
+            });
+          }}
+          className="w-full rounded-xl border border-[#c7a86a33] bg-[#c7a86a12] px-3 py-2.5 text-left transition active:scale-[0.99] hover:bg-[#c7a86a]/15"
+        >
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[#c7a86a]/70">
+            {formatHistoryDate(latestHistory.workout)}
+          </div>
+          <div className="mt-0.5 text-xs text-[#d7c7a4]">
+            {summarizeExerciseSets({
+              name: exercise.name,
+              sets: historySets,
+            })}
+            <span className="text-white/35"> · tap to apply</span>
+          </div>
+        </button>
+      </EditorSection>
+    )}
 
-  return updated;
-});
-  }}
-  className="mt-3 text-sm text-purple-300 hover:text-purple-200 transition-all duration-200 active:scale-[0.98]">
-  + Add Set
-</button>
-</div>
-)}
+    <EditorSection
+      title="Mode"
+      summary={modeSummary}
+      open={isEditorSectionOpen(exerciseKey, "mode")}
+      onToggle={() => toggleEditorSection(exerciseKey, "mode")}
+    >
+      <div className="flex gap-1 rounded-xl border border-white/10 bg-black/30 p-1">
+        {LOGGING_MODES.map((mode) => {
+          const selected = loggingMode === mode.id;
+          return (
+            <button
+              key={mode.id}
+              type="button"
+              onClick={() => {
+                updateExerciseAt(dayIndex, exIndex, (ex) => {
+                  ex.loggingMode = mode.id;
+                  ex.sets = applyLoggingModeToSets(ex.sets || [], mode.id);
+                });
+              }}
+              className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-medium transition active:scale-[0.98] ${
+                selected
+                  ? "bg-[#c7a86a] text-black shadow-[0_0_12px_rgba(199,168,106,0.35)]"
+                  : "text-white/60 hover:bg-white/5 hover:text-white/85"
+              }`}
+            >
+              {mode.label}
+            </button>
+          );
+        })}
+      </div>
+    </EditorSection>
+
+    <div className="rounded-xl border border-white/10 bg-black/25 px-3 py-3 space-y-2.5">
+      <div className="text-[10px] uppercase tracking-[0.14em] text-white/40">
+        Sets
+      </div>
+
+      <div className="space-y-2">
+        {sets.map((set, setIndex) => (
+          <div
+            key={setIndex}
+            className="rounded-xl border border-white/5 bg-black/30 px-2.5 py-2"
+          >
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="h-7 w-7 rounded-full border border-[#c7a86a40] bg-[#c7a86a12] flex items-center justify-center text-xs font-semibold text-[#d7c7a4]">
+                {setIndex + 1}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!confirm("Delete this set?")) return;
+                  updateExerciseAt(dayIndex, exIndex, (ex) => {
+                    if ((ex.sets || []).length <= 1) {
+                      alert("At least one set is required.");
+                      return;
+                    }
+                    ex.sets.splice(setIndex, 1);
+                  });
+                }}
+                className="flex items-center justify-center text-red-400 hover:text-red-300"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+
+            <div
+              className={`grid gap-2 ${
+                modeMeta.showLoad || loggingMode === "bodyweight"
+                  ? "grid-cols-2"
+                  : "grid-cols-1"
+              }`}
+            >
+              {loggingMode === "bodyweight" ? (
+                <div className="flex h-11 items-center justify-center rounded-xl border border-white/10 bg-black/40 text-xl font-semibold text-white">
+                  BW
+                </div>
+              ) : modeMeta.showLoad ? (
+                <WheelDial
+                  values={weightDialValues}
+                  value={
+                    loggingMode === "band"
+                      ? normalizeBandLabel(set.weight || "")
+                      : set.weight || ""
+                  }
+                  unit={loadUnit}
+                  onChange={(next) => {
+                    updateExerciseAt(dayIndex, exIndex, (ex) => {
+                      ex.sets[setIndex].weight =
+                        loggingMode === "band"
+                          ? normalizeBandLabel(next)
+                          : next;
+                    });
+                  }}
+                  className="rounded-xl border border-white/10 bg-black/40"
+                />
+              ) : null}
+
+              <WheelDial
+                values={repDialValues}
+                value={set.reps ?? ""}
+                unit={valueUnit}
+                onChange={(next) => {
+                  updateExerciseAt(dayIndex, exIndex, (ex) => {
+                    ex.sets[setIndex].reps = next;
+                  });
+                }}
+                className="rounded-xl border border-white/10 bg-black/40"
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-2 pt-1">
+        <button
+          type="button"
+          onClick={() => {
+            updateExerciseAt(dayIndex, exIndex, (ex) => {
+              ex.sets = ex.sets || [];
+              ex.sets.push(createEmptySet(loggingMode));
+            });
+          }}
+          className="flex-1 rounded-xl border border-[#c7a86a33] bg-[#c7a86a12] py-2 text-xs text-[#d7c7a4] hover:bg-[#c7a86a]/15 transition-all duration-200 active:scale-[0.98]"
+        >
+          + Add Set
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            updateExerciseAt(dayIndex, exIndex, (ex) => {
+              const list = ex.sets || [];
+              const last = list[list.length - 1];
+              list.push(createEmptySet(loggingMode, last || null));
+              ex.sets = list;
+            });
+          }}
+          className="flex-1 rounded-xl border border-white/10 bg-black/40 py-2 text-xs text-white/75 hover:bg-white/5 transition-all duration-200 active:scale-[0.98]"
+        >
+          Duplicate Last
+        </button>
+      </div>
+    </div>
+  </div>
+  );
+})()}
 </div>
   ))}
     <button
   onClick={(e) => {
     e.stopPropagation();
+
+   const nextIndex =
+     draftProgram?.routines?.[activeRoutineIndex]?.days?.[dayIndex]
+       ?.exercises?.length || 0;
 
    setDraftProgram((prev) => {
   const updated = JSON.parse(JSON.stringify(prev));
@@ -714,13 +1620,19 @@ onBlur={(e) => {
     .days[dayIndex]
     .exercises.push({
       name: "",
-      sets: [{ reps: "", weight: "" }]
+      loggingMode: "load",
+      sets: [createEmptySet("load")]
     });
 
   return updated;
 });
+
+   setExpandedExercises((prev) => ({
+     ...prev,
+     [`${dayIndex}-${nextIndex}`]: true,
+   }));
   }}
-  className="mt-4 w-full rounded-2xl border border-purple-500/20 bg-purple-500/5 py-3 text-sm text-purple-300 hover:bg-purple-500/10 transition-all duration-200 active:scale-[0.98]"
+  className="mt-4 w-full rounded-2xl border border-[#c7a86a33] bg-[#c7a86a12] py-3 text-sm text-[#d7c7a4] hover:bg-[#c7a86a]/15 transition-all duration-200 active:scale-[0.98]"
 >
   + Add Exercise
 </button>
@@ -740,6 +1652,8 @@ onBlur={(e) => {
 
     routinesArray[activeRoutineIndex].days.push({
       name: `Day ${routinesArray[activeRoutineIndex].days.length + 1}`,
+      mode: "straight",
+      amrapDurationMinutes: 20,
       exercises: []
     });
 
@@ -747,13 +1661,13 @@ onBlur={(e) => {
 
     setDraftProgram(updated);
   }}
-  className="mt-1 w-full rounded-2xl border border-white/30 bg-black/90 backdrop-blur-md py-3 text-sm text-purple-300 hover:bg-black/50 active:scale-[0.98] transition-all duration-200"
+  className="mt-1 w-full rounded-2xl border border-[#c7a86a55] bg-black/55 backdrop-blur-md py-3 text-sm text-[#d7c7a4] hover:bg-black/40 active:scale-[0.98] transition-all duration-200"
 >
   + Add Day
 </button>
 
 
-      <div className="mt-6 mb-4 rounded-3xl border border-white/10 bg-slate-900/90 backdrop-blur-md p-4">
+      <div className="mt-6 mb-4 rounded-3xl border border-white/10 bg-black/55 backdrop-blur-md p-4">
 
         <div className="flex gap-3">
           <button
