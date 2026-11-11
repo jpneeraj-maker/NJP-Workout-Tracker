@@ -4,7 +4,7 @@ import hammerCurl from "./Assets/images/arms/hammer_curl.png";
 import inclineBicepCurl from "./Assets/images/arms/incline_bicep_curl.png";
 
 import barbellRows from "./Assets/images/back/barbell_rows.png";
-import dumbbellPullovers from "./Assets/images/back/dumbbell_pullovers.png";
+import dumbbellPullovers from "./Assets/images/back/Dumbbell_Pullover_Exercise.png";
 import singleArmDumbbellRow from "./Assets/images/back/single_arm_dumbbell_row.png";
 
 import dumbbellFlatBenchPress from "./Assets/images/chest/dumbbell_flat_bench_press.png";
@@ -33,6 +33,49 @@ import foamRolling from "./Assets/images/stretching and mobility/foam_rolling.pn
 import stretching from "./Assets/images/stretching and mobility/stretching.png";
 import worldsGreatestStretch from "./Assets/images/stretching and mobility/worlds_greatest_stretch.png";
 
+/** Equipment modality inferred from an exercise / map key name. */
+const EQUIPMENT_PATTERNS = [
+  { id: "band", test: /\bband\b/i },
+  { id: "dumbbell", test: /\b(dumbbells?|dbs?)\b/i },
+  { id: "barbell", test: /\b(barbell|bb|ez\s?bars?|ezbar)\b/i },
+  { id: "cable", test: /\bcable\b/i },
+];
+
+/**
+ * Equipment tag for each bundled asset (from the demo shown).
+ * Empty set = generic / bodyweight / mixed — usable by any non-band-specific name.
+ */
+const IMAGE_EQUIPMENT = new Map([
+  [bandHamstringCurl, new Set(["band"])],
+  [bandShoulderDislocates, new Set(["band"])],
+  [dumbbellFlatBenchPress, new Set(["dumbbell"])],
+  [inclineDumbbellChestPress, new Set(["dumbbell"])],
+  [dumbbellPullovers, new Set(["dumbbell"])],
+  [singleArmDumbbellRow, new Set(["dumbbell"])],
+  [hammerCurl, new Set(["dumbbell"])],
+  [inclineBicepCurl, new Set(["dumbbell"])],
+  [lateralRaises, new Set(["dumbbell"])],
+  [rearDeltFly, new Set(["dumbbell"])],
+  [shoulderPress, new Set(["dumbbell"])],
+  [uprightRows, new Set(["dumbbell"])],
+  [farmersCarry, new Set(["dumbbell"])],
+  [flatBenchPress, new Set(["barbell"])],
+  [barbellRows, new Set(["barbell"])],
+  [barbellRdls, new Set(["barbell"])],
+  [ezbarSkullcrushers, new Set(["barbell"])],
+  [hipThrust, new Set(["barbell"])],
+  [squats, new Set(["barbell"])],
+  [bulgarianSplitSquats, new Set(["dumbbell"])],
+  [calfRaises, new Set()],
+  [abRollout, new Set(["bodyweight"])],
+  [legRaises, new Set(["bodyweight"])],
+  [rkcPlank, new Set(["bodyweight"])],
+  [deepSquatHold, new Set(["bodyweight"])],
+  [foamRolling, new Set(["bodyweight"])],
+  [stretching, new Set(["bodyweight"])],
+  [worldsGreatestStretch, new Set(["bodyweight"])],
+]);
+
 const EXERCISE_IMAGES_BY_NAME = {
   // Chest
   "dumbbell flat bench press": dumbbellFlatBenchPress,
@@ -51,7 +94,7 @@ const EXERCISE_IMAGES_BY_NAME = {
   "incline dumbbell press": inclineDumbbellChestPress,
   "incline dumbbell bench press": inclineDumbbellChestPress,
   "decline bench press": flatBenchPress,
-  "decline db bench press": flatBenchPress,
+  "decline db bench press": dumbbellFlatBenchPress,
   "flat dumbbell fly": dumbbellFlatBenchPress,
   "flat db fly": dumbbellFlatBenchPress,
   "dumbbell fly": dumbbellFlatBenchPress,
@@ -150,7 +193,6 @@ const EXERCISE_IMAGES_BY_NAME = {
   "barbell hip thrust": hipThrust,
   "squats": squats,
   "squat": squats,
-  "x3 band squat": squats,
   "walking lunges": bulgarianSplitSquats,
 
   // Core
@@ -193,7 +235,7 @@ const KEYWORD_IMAGE_RULES = [
   { test: /upright (row|high pull|y raise)/i, image: uprightRows },
   { test: /skull\s?crush|overhead extension|triceps (pushdown|extension)/i, image: ezbarSkullcrushers },
   { test: /farmer/i, image: farmersCarry },
-  { test: /hamstring curl/i, image: bandHamstringCurl },
+  { test: /band.*hamstring curl|hamstring curl.*band/i, image: bandHamstringCurl },
   { test: /hammer curl/i, image: hammerCurl },
   { test: /wrist curl/i, image: inclineBicepCurl },
   { test: /curl/i, image: inclineBicepCurl },
@@ -208,13 +250,13 @@ const KEYWORD_IMAGE_RULES = [
   { test: /face pull/i, image: rearDeltFly },
   { test: /shrug/i, image: uprightRows },
   { test: /fly|flies/i, image: dumbbellFlatBenchPress },
-  { test: /dislocate/i, image: bandShoulderDislocates },
+  { test: /band.*dislocate|dislocate.*band/i, image: bandShoulderDislocates },
   { test: /foam roll/i, image: foamRolling },
   { test: /world.?s greatest|greatest stretch/i, image: worldsGreatestStretch },
   { test: /stretch|mobility|foam/i, image: stretching },
 ];
 
-function normalizeExerciseName(name) {
+export function normalizeExerciseName(name) {
   return String(name || "")
     .toLowerCase()
     .replace(/[_-]+/g, " ")
@@ -222,18 +264,126 @@ function normalizeExerciseName(name) {
     .trim();
 }
 
-export function getExerciseImage(exercise) {
+export function getEquipmentModalities(name) {
+  const key = normalizeExerciseName(name);
+  const mods = new Set();
+  if (!key) return mods;
+  for (const pattern of EQUIPMENT_PATTERNS) {
+    if (pattern.test.test(key)) mods.add(pattern.id);
+  }
+  return mods;
+}
+
+/** Infer equipment context from a routine title (Band, No Equipment, etc.). */
+export function getRoutineEquipmentModalities(routineName) {
+  const key = normalizeExerciseName(routineName);
+  const mods = new Set();
+  if (!key) return mods;
+
+  if (
+    /\b(no\s*equip(?:ment)?|without\s*equip(?:ment)?|body\s*weight|bodyweight|calisthenics)\b/.test(
+      key
+    ) ||
+    /\bbw\b/.test(key)
+  ) {
+    mods.add("bodyweight");
+  }
+
+  for (const pattern of EQUIPMENT_PATTERNS) {
+    if (pattern.test.test(key)) mods.add(pattern.id);
+  }
+
+  return mods;
+}
+
+/**
+ * Routine context fills in when the exercise name has no load equipment token.
+ * Explicit exercise tokens (band / db / barbell / cable) win.
+ */
+export function mergeEquipmentModalities(exerciseMods, routineMods) {
+  const merged = new Set(exerciseMods || []);
+  const exerciseHasLoad = ["band", "dumbbell", "barbell", "cable"].some((m) =>
+    merged.has(m)
+  );
+  if (exerciseHasLoad) return merged;
+
+  for (const mod of routineMods || []) {
+    merged.add(mod);
+  }
+  return merged;
+}
+
+function getImageEquipment(image) {
+  return IMAGE_EQUIPMENT.get(image) || new Set();
+}
+
+/**
+ * Band is exclusive: band context only gets band images.
+ * Bodyweight / no-equipment only gets bodyweight or untagged assets.
+ * Dumbbell / barbell names reject the opposite exclusive asset.
+ */
+export function isEquipmentCompatible(exerciseNameOrMods, image) {
+  const exerciseMods =
+    exerciseNameOrMods instanceof Set
+      ? exerciseNameOrMods
+      : getEquipmentModalities(exerciseNameOrMods);
+  const imageMods = getImageEquipment(image);
+
+  if (exerciseMods.has("band")) {
+    return imageMods.has("band");
+  }
+
+  if (exerciseMods.has("bodyweight")) {
+    if (imageMods.has("band") || imageMods.has("dumbbell") || imageMods.has("barbell")) {
+      return false;
+    }
+    return imageMods.size === 0 || imageMods.has("bodyweight");
+  }
+
+  if (exerciseMods.has("dumbbell") && imageMods.has("barbell") && !imageMods.has("dumbbell")) {
+    return false;
+  }
+  if (exerciseMods.has("barbell") && imageMods.has("dumbbell") && !imageMods.has("barbell")) {
+    return false;
+  }
+
+  return true;
+}
+
+/** Unique display names for bundled default images (deduped by image asset). */
+export function getBundledExerciseNames() {
+  const seen = new Set();
+  const names = [];
+  for (const [name, image] of Object.entries(EXERCISE_IMAGES_BY_NAME)) {
+    if (seen.has(image)) continue;
+    seen.add(image);
+    names.push(name);
+  }
+  return names;
+}
+
+export function getExerciseImage(exercise, options = {}) {
   if (exercise?.image) return exercise.image;
 
   const key = normalizeExerciseName(exercise?.name);
   if (!key) return null;
 
+  const mods = mergeEquipmentModalities(
+    getEquipmentModalities(key),
+    getRoutineEquipmentModalities(options.routineName)
+  );
+
   if (EXERCISE_IMAGES_BY_NAME[key]) {
-    return EXERCISE_IMAGES_BY_NAME[key];
+    const image = EXERCISE_IMAGES_BY_NAME[key];
+    if (isEquipmentCompatible(mods, image)) {
+      return image;
+    }
   }
 
   for (const rule of KEYWORD_IMAGE_RULES) {
-    if (rule.test.test(key)) return rule.image;
+    if (!rule.test.test(key)) continue;
+    if (!isEquipmentCompatible(mods, rule.image)) continue;
+    return rule.image;
   }
 
   return null;

@@ -8,7 +8,7 @@ import {
 } from "@dnd-kit/sortable";
 
 import { useMemo } from "react";
-import { getExerciseImage } from "../exerciseImages";
+import { resolveExerciseImage } from "../exerciseCatalog";
 import WheelDial, {
   buildRepValues,
   buildWeightValues,
@@ -145,7 +145,16 @@ export default function WorkoutPage(props) {
     completedWorkout?.type === "amrap" ||
     Array.isArray(completedWorkout?.circuit);
 
-const activeExerciseImage = getExerciseImage(activeExercise);
+  const activeRoutineName =
+    data?.routines?.[activeWeekKey]?.name ||
+    `Routine ${Number(activeWeekKey) + 1 || 1}`;
+  const imageOptions = { routineName: activeRoutineName };
+
+const activeExerciseImage = resolveExerciseImage(
+  activeExercise,
+  data,
+  imageOptions
+);
 const loggingMode = inferLoggingMode(activeExercise);
 const loggingMeta = getLoggingModeMeta(loggingMode);
 
@@ -266,97 +275,123 @@ const repDialValues = useMemo(
         workoutMode &&
         activeWorkoutScreen === "amrap-active" &&
         amrapDay && (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <div className="flex min-h-0 flex-1 flex-col rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
-              <div className="mb-4 relative flex items-center text-sm text-white/70">
-                <button
-                  onClick={() => setShowEndWorkoutConfirm(true)}
-                  className="text-xl leading-none text-white/70"
-                >
-                  ←
-                </button>
-                <div className="absolute left-1/2 max-w-[75%] -translate-x-1/2 truncate text-center text-lg font-semibold text-white">
-                  {currentDay?.name}{" "}
-                  <span className="font-normal text-white/55">| AMRAP</span>
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                <div className="mb-4 relative flex items-center text-sm text-white/70">
+                  <button
+                    onClick={() => setShowEndWorkoutConfirm(true)}
+                    className="text-xl leading-none text-white/70"
+                  >
+                    ←
+                  </button>
+                  <div className="absolute left-1/2 max-w-[75%] -translate-x-1/2 truncate text-center text-lg font-semibold text-white">
+                    {currentDay?.name}{" "}
+                    <span className="font-normal text-white/55">| AMRAP</span>
+                  </div>
                 </div>
-              </div>
 
-              <div className="mb-4 flex justify-center">
-                <div className="flex h-36 w-36 items-center justify-center rounded-full border-4 border-[#c7a86a66] bg-black/30">
-                  <div className="text-center">
-                    <div className="font-mono text-4xl text-white">
-                      {formatTime(amrapSecondsRemaining)}
+                <div className="mb-4 flex justify-center">
+                  <div className="flex h-36 w-36 items-center justify-center rounded-full border-4 border-[#c7a86a66] bg-black/30">
+                    <div className="text-center">
+                      <div className="font-mono text-4xl text-white">
+                        {formatTime(amrapSecondsRemaining)}
+                      </div>
+                      <div className="mt-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                        Remaining
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mb-4 grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-white/10 bg-black/25 p-3 text-center">
+                    <div className="text-3xl font-semibold text-white">
+                      {amrapCircuitsCompleted}
                     </div>
                     <div className="mt-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
-                      Remaining
+                      Circuits
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/25 p-3 text-center">
+                    <div className="text-3xl font-semibold text-white">
+                      {getAmrapDurationMinutes(currentDay)}
+                    </div>
+                    <div className="mt-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                      Minutes
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="mb-4 grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-white/10 bg-black/25 p-3 text-center">
-                  <div className="text-3xl font-semibold text-white">
-                    {amrapCircuitsCompleted}
-                  </div>
-                  <div className="mt-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
-                    Circuits
-                  </div>
+                <div className="mb-4 text-[11px] uppercase tracking-[0.2em] text-white/45">
+                  Circuit
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-black/25 p-3 text-center">
-                  <div className="text-3xl font-semibold text-white">
-                    {getAmrapDurationMinutes(currentDay)}
-                  </div>
-                  <div className="mt-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
-                    Minutes
-                  </div>
+                <div className="space-y-2 pb-1">
+                  {(currentDay?.exercises || []).map((exercise, index) => {
+                    const image = resolveExerciseImage(
+                      exercise,
+                      data,
+                      imageOptions
+                    );
+                    return (
+                      <div
+                        key={`${exercise.name}-${index}`}
+                        className="rounded-2xl border border-white/10 bg-black/30 px-3 py-2.5"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[#c7a86a40] text-[11px] text-[#d7c7a4]/70">
+                            {index + 1}
+                          </div>
+                          <div className="h-12 w-20 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/70">
+                            {image ? (
+                              <img
+                                src={image}
+                                alt=""
+                                loading="lazy"
+                                decoding="async"
+                                className="h-full w-full object-contain"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-[9px] uppercase tracking-wide text-white/25">
+                                N/A
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="break-words font-medium text-white">
+                              {exercise.name}
+                            </div>
+                            <div className="text-sm text-white/55">
+                              {formatCircuitPrescription(exercise)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              <div className="mb-4 text-[11px] uppercase tracking-[0.2em] text-white/45">
-                Circuit
+              <div className="mt-3 shrink-0 space-y-2 border-t border-white/10 pt-3">
+                <button
+                  onClick={completeAmrapCircuit}
+                  className="w-full rounded-xl bg-blue-600 py-3.5 text-sm font-medium text-white shadow-lg active:scale-[0.98] transition-all"
+                >
+                  Circuit Done (+1)
+                </button>
+                <button
+                  onClick={undoAmrapCircuit}
+                  disabled={!amrapCircuitsCompleted}
+                  className="w-full rounded-xl py-2.5 text-sm text-white/45 disabled:opacity-30 active:scale-95 transition-all"
+                >
+                  Undo last circuit
+                </button>
               </div>
-              <div className="mb-4 space-y-2">
-                {(currentDay?.exercises || []).map((exercise, index) => (
-                  <div
-                    key={`${exercise.name}-${index}`}
-                    className="rounded-2xl border border-white/10 bg-black/30 px-3 py-3"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[#c7a86a40] text-[11px] text-[#d7c7a4]/70">
-                        {index + 1}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="truncate font-medium text-white">
-                          {exercise.name}
-                        </div>
-                        <div className="text-sm text-white/55">
-                          {formatCircuitPrescription(exercise)}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <button
-                onClick={completeAmrapCircuit}
-                className="mb-2 w-full rounded-xl bg-blue-600 py-3.5 text-sm font-medium text-white shadow-lg active:scale-[0.98] transition-all"
-              >
-                Circuit Done (+1)
-              </button>
-              <button
-                onClick={undoAmrapCircuit}
-                disabled={!amrapCircuitsCompleted}
-                className="w-full rounded-xl py-2.5 text-sm text-white/45 disabled:opacity-30 active:scale-95 transition-all"
-              >
-                Undo last circuit
-              </button>
             </div>
 
             <button
               onClick={() => setShowEndWorkoutConfirm(true)}
-              className="mt-4 rounded-2xl border border-red-500/30 bg-red-600/20 py-3 text-sm font-medium text-red-300"
+              className="shrink-0 rounded-2xl border border-red-500/30 bg-red-600/20 py-3 text-sm font-medium text-red-300"
             >
               End Workout
             </button>
@@ -368,95 +403,100 @@ const repDialValues = useMemo(
         activeWorkoutScreen === "amrap-partial" &&
         amrapDay && (
           <div className="flex min-h-0 flex-1 flex-col">
-            <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
-              <div className="mb-2 text-center text-2xl font-semibold text-white">
-                Time’s up
-              </div>
-              <div className="mb-4 text-center text-sm text-white/60">
-                You finished {amrapCircuitsCompleted} full circuit
-                {amrapCircuitsCompleted === 1 ? "" : "s"}. Log anything you
-                completed in the incomplete circuit.
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                <div className="mb-2 text-center text-2xl font-semibold text-white">
+                  Time’s up
+                </div>
+                <div className="mb-4 text-center text-sm text-white/60">
+                  You finished {amrapCircuitsCompleted} full circuit
+                  {amrapCircuitsCompleted === 1 ? "" : "s"}. Log anything you
+                  completed in the incomplete circuit.
+                </div>
+
+                <div className="space-y-3 pb-1">
+                  {(amrapPartialEntries || []).map((entry, index) => (
+                    <div
+                      key={`${entry.name}-${index}`}
+                      className="rounded-2xl border border-white/10 bg-black/30 p-3"
+                    >
+                      <div className="mb-1 break-words font-medium text-white">
+                        {entry.name}
+                      </div>
+                      <div className="mb-2 text-xs text-white/45">
+                        Target{" "}
+                        {formatCircuitPrescription({
+                          name: entry.name,
+                          loggingMode: entry.loggingMode,
+                          sets: [
+                            {
+                              plannedWeight: entry.plannedWeight,
+                              weight: entry.plannedWeight,
+                              targetReps: entry.targetReps,
+                              reps: entry.targetReps,
+                            },
+                          ],
+                        })}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          inputMode="text"
+                          placeholder="Load done"
+                          value={entry.actualWeight}
+                          onChange={(e) =>
+                            updateAmrapPartialEntry(
+                              index,
+                              "actualWeight",
+                              e.target.value
+                            )
+                          }
+                          className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-center text-sm text-white placeholder:text-white/25"
+                        />
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="Reps/secs done"
+                          value={entry.actualReps}
+                          onChange={(e) =>
+                            updateAmrapPartialEntry(
+                              index,
+                              "actualReps",
+                              e.target.value
+                            )
+                          }
+                          className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-center text-sm text-white placeholder:text-white/25"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              <div className="mb-4 space-y-3">
-                {(amrapPartialEntries || []).map((entry, index) => (
-                  <div
-                    key={`${entry.name}-${index}`}
-                    className="rounded-2xl border border-white/10 bg-black/30 p-3"
-                  >
-                    <div className="mb-1 font-medium text-white">
-                      {entry.name}
-                    </div>
-                    <div className="mb-2 text-xs text-white/45">
-                      Target{" "}
-                      {formatCircuitPrescription({
-                        name: entry.name,
-                        loggingMode: entry.loggingMode,
-                        sets: [
-                          {
-                            plannedWeight: entry.plannedWeight,
-                            weight: entry.plannedWeight,
-                            targetReps: entry.targetReps,
-                            reps: entry.targetReps,
-                          },
-                        ],
-                      })}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        inputMode="text"
-                        placeholder="Load done"
-                        value={entry.actualWeight}
-                        onChange={(e) =>
-                          updateAmrapPartialEntry(
-                            index,
-                            "actualWeight",
-                            e.target.value
-                          )
-                        }
-                        className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-center text-sm text-white placeholder:text-white/25"
-                      />
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        placeholder="Reps/secs done"
-                        value={entry.actualReps}
-                        onChange={(e) =>
-                          updateAmrapPartialEntry(
-                            index,
-                            "actualReps",
-                            e.target.value
-                          )
-                        }
-                        className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-center text-sm text-white placeholder:text-white/25"
-                      />
-                    </div>
-                  </div>
-                ))}
+              <div className="mt-3 shrink-0 space-y-2 border-t border-white/10 pt-3">
+                <button
+                  disabled={endWorkoutBusy}
+                  onClick={finishAmrapWithPartial}
+                  className="w-full rounded-xl bg-blue-600 py-3.5 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  Save with partial circuit
+                </button>
+                <button
+                  disabled={endWorkoutBusy}
+                  onClick={finishAmrapWithoutPartial}
+                  className="w-full rounded-xl border border-white/10 bg-black/20 py-3 text-sm text-white/70 disabled:opacity-50"
+                >
+                  Skip partial — save full circuits only
+                </button>
               </div>
-
-              <button
-                disabled={endWorkoutBusy}
-                onClick={finishAmrapWithPartial}
-                className="mb-2 w-full rounded-xl bg-blue-600 py-3.5 text-sm font-medium text-white disabled:opacity-50"
-              >
-                Save with partial circuit
-              </button>
-              <button
-                disabled={endWorkoutBusy}
-                onClick={finishAmrapWithoutPartial}
-                className="w-full rounded-xl border border-white/10 bg-black/20 py-3 text-sm text-white/70 disabled:opacity-50"
-              >
-                Skip partial — save full circuits only
-              </button>
             </div>
           </div>
         )}
 
       {activeTab === "workout" && workoutMode && activeWorkoutScreen === "active" && (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex min-h-0 flex-1 flex-col rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             <div className="mb-4 relative flex items-center justify-left text-sm text-white/70">
               <button
                onClick={() => setShowEndWorkoutConfirm(true)}
@@ -534,7 +574,7 @@ const repDialValues = useMemo(
 
 </div>
       
-            <div className="mb-4 flex min-h-[140px] flex-1 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/40">
+            <div className="mb-4 flex h-[min(32vh,180px)] min-h-[120px] items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/40">
               {activeExerciseImage ? (
                 <img
                   src={activeExerciseImage}
@@ -696,64 +736,66 @@ const repDialValues = useMemo(
                     )}
                   </div>
 
-                  <div className="mt-1 space-y-2.5">
-                    <button
-                      onClick={advanceWorkout}
-                      className="w-full rounded-xl bg-blue-600 py-3.5 text-sm font-medium text-white shadow-lg active:scale-[0.98] transition-all"
-                    >
-                      {isFinalSetOfWorkout
-                        ? "Finish Workout"
-                        : isLastSetOfExercise
-                        ? "Next Exercise"
-                        : "Next Set"}
-                    </button>
-
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          if (activeSetIndex > 0) {
-                            setActiveSetIndex((prev) => prev - 1);
-                          } else if (activeExerciseIndex > 0) {
-                            const previousExercise =
-                              currentDay.exercises[activeExerciseIndex - 1];
-
-                            setActiveExerciseIndex((prev) => prev - 1);
-                            setActiveSetIndex(
-                              previousExercise.sets.length - 1
-                            );
-                          }
-                        }}
-                        className="flex-1 rounded-xl py-2.5 text-sm text-white/45 active:scale-95 transition-all"
-                      >
-                        ← Previous
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setSkippedSets((prev) => prev + 1);
-                          advanceWorkout();
-                        }}
-                        className="flex-1 rounded-xl border border-yellow-500/25 bg-transparent py-2.5 text-sm text-yellow-400/75 active:scale-95 transition-all"
-                      >
-                        Skip Set
-                      </button>
-
-                      <button
-                        onClick={skipExercise}
-                        className="flex-1 rounded-xl border border-orange-500/35 bg-orange-600/15 py-2.5 text-sm text-orange-300 active:scale-95 transition-all"
-                      >
-                        Skip Exercise
-                      </button>
-                    </div>
-                  </div>
                 </>
               );
             })() : null}
+            </div>
+
+            {activeExercise && activeSet ? (
+              <div className="mt-3 shrink-0 space-y-2.5 border-t border-white/10 pt-3">
+                <button
+                  onClick={advanceWorkout}
+                  className="w-full rounded-xl bg-blue-600 py-3.5 text-sm font-medium text-white shadow-lg active:scale-[0.98] transition-all"
+                >
+                  {isFinalSetOfWorkout
+                    ? "Finish Workout"
+                    : isLastSetOfExercise
+                      ? "Next Exercise"
+                      : "Next Set"}
+                </button>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      if (activeSetIndex > 0) {
+                        setActiveSetIndex((prev) => prev - 1);
+                      } else if (activeExerciseIndex > 0) {
+                        const previousExercise =
+                          currentDay.exercises[activeExerciseIndex - 1];
+
+                        setActiveExerciseIndex((prev) => prev - 1);
+                        setActiveSetIndex(previousExercise.sets.length - 1);
+                      }
+                    }}
+                    className="flex-1 rounded-xl py-2.5 text-sm text-white/45 active:scale-95 transition-all"
+                  >
+                    ← Previous
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setSkippedSets((prev) => prev + 1);
+                      advanceWorkout();
+                    }}
+                    className="flex-1 rounded-xl border border-yellow-500/25 bg-transparent py-2.5 text-sm text-yellow-400/75 active:scale-95 transition-all"
+                  >
+                    Skip Set
+                  </button>
+
+                  <button
+                    onClick={skipExercise}
+                    className="flex-1 rounded-xl border border-orange-500/35 bg-orange-600/15 py-2.5 text-sm text-orange-300 active:scale-95 transition-all"
+                  >
+                    Skip Exercise
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
       
           <button
             onClick={() => setShowEndWorkoutConfirm(true)}
-            className="mt-3 shrink-0 rounded-2xl border border-red-500/30 bg-red-600/20 py-3 text-sm font-medium text-red-300"
+            className="shrink-0 rounded-2xl border border-red-500/30 bg-red-600/20 py-3 text-sm font-medium text-red-300"
           >
             End Workout
           </button>
@@ -762,298 +804,297 @@ const repDialValues = useMemo(
       {activeTab === "workout" &&
         workoutMode &&
         activeWorkoutScreen === "rest-set" && (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <div className="flex min-h-0 flex-1 flex-col rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
-              <div className="mb-4 flex items-center justify-between text-sm text-white/70">
-                <button
-                  onClick={() => setWorkoutMode(false)}
-                  className="text-xl leading-none text-white/70"
-                >
-                  ←
-                </button>
-      
-                <div className="text-center">
-                  <div className="text-lg font-semibold text-white">
-                    Rest Between Sets
-                  </div>
-                </div>
-      
-                <button
-                  onClick={() => setShowEndWorkoutConfirm(true)}
-                  className="text-xl leading-none text-white/70"
-                >
-                  ⋯
-                </button>
-              </div>
-      
-              <div className="mb-4 flex items-center justify-between text-xs text-white/60">
-                <div>Workout Time</div>
-      
-                <div className="font-mono text-sm text-white">
-                  {formatTime(workoutSeconds)}
-                </div>
-              </div>
-      
-              <div className="mb-6 flex justify-center">
-                <div className="flex h-48 w-48 items-center justify-center rounded-full border-4 border-blue-500/50 bg-black/20">
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                <div className="mb-4 flex items-center justify-between text-sm text-white/70">
+                  <button
+                    onClick={() => setWorkoutMode(false)}
+                    className="text-xl leading-none text-white/70"
+                  >
+                    ←
+                  </button>
+
                   <div className="text-center">
-                    <div className="font-mono text-5xl text-white">
-                      {formatTime(restSeconds)}
+                    <div className="text-lg font-semibold text-white">
+                      Rest Between Sets
                     </div>
-      
-                    <div className="mt-2 text-[11px] uppercase tracking-[0.25em] text-white/50">
-                      Time Remaining
+                  </div>
+
+                  <button
+                    onClick={() => setShowEndWorkoutConfirm(true)}
+                    className="text-xl leading-none text-white/70"
+                  >
+                    ⋯
+                  </button>
+                </div>
+
+                <div className="mb-4 flex items-center justify-between text-xs text-white/60">
+                  <div>Workout Time</div>
+                  <div className="font-mono text-sm text-white">
+                    {formatTime(workoutSeconds)}
+                  </div>
+                </div>
+
+                <div className="mb-6 flex justify-center">
+                  <div className="flex h-40 w-40 items-center justify-center rounded-full border-4 border-blue-500/50 bg-black/20 sm:h-48 sm:w-48">
+                    <div className="text-center">
+                      <div className="font-mono text-4xl text-white sm:text-5xl">
+                        {formatTime(restSeconds)}
+                      </div>
+                      <div className="mt-2 text-[11px] uppercase tracking-[0.25em] text-white/50">
+                        Time Remaining
+                      </div>
                     </div>
                   </div>
                 </div>
+
+                <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-center">
+                  <div className="mb-2 text-sm font-medium text-blue-300">
+                    Next Set
+                  </div>
+                  <div className="break-words text-lg font-semibold text-white">
+                    {activeExercise?.name}
+                  </div>
+                  <div className="mt-1 text-sm text-white/70">
+                    {activeExercise?.sets?.[activeSetIndex + 1]?.type}
+                  </div>
+                  <div className="mt-3 text-base text-white">
+                    {formatTargetLine(
+                      activeExercise,
+                      activeExercise?.sets?.[activeSetIndex + 1]
+                    ).replace(/^Target ·\s*/, "")}
+                  </div>
+                </div>
+
+                <div className="mb-1 rounded-2xl border border-white/10 bg-black/20 p-3">
+                  <div className="mb-2 text-[11px] uppercase tracking-[0.2em] text-white/50">
+                    Exercise Remarks
+                  </div>
+                  <textarea
+                    value={activeExercise?.remarks || ""}
+                    onChange={(e) =>
+                      updateExerciseRemark(
+                        activeWeekKey,
+                        activeDayIndex,
+                        activeExerciseIndex,
+                        e.target.value
+                      )
+                    }
+                    placeholder="Add notes for this set..."
+                    rows={2}
+                    className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white placeholder:text-white/30"
+                  />
+                </div>
               </div>
-      
-              <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-center">
-                <div className="mb-2 text-sm font-medium text-blue-300">
-                  Next Set
+
+              <div className="mt-3 shrink-0 space-y-2 border-t border-white/10 pt-3">
+                <div className="grid grid-cols-4 gap-2">
+                  <button
+                    onClick={() =>
+                      setRestSeconds((prev) => Math.max(0, prev - 30))
+                    }
+                    className="rounded-xl border border-white/10 bg-black/20 py-2 text-sm text-white/80"
+                  >
+                    -30s
+                  </button>
+                  <button
+                    onClick={() =>
+                      setRestSeconds((prev) => Math.max(0, prev - 15))
+                    }
+                    className="rounded-xl border border-white/10 bg-black/20 py-2 text-sm text-white/80"
+                  >
+                    -15s
+                  </button>
+                  <button
+                    onClick={() => setRestSeconds((prev) => prev + 15)}
+                    className="rounded-xl border border-white/10 bg-black/20 py-2 text-sm text-white/80"
+                  >
+                    +15s
+                  </button>
+                  <button
+                    onClick={() => setRestSeconds((prev) => prev + 30)}
+                    className="rounded-xl border border-white/10 bg-black/20 py-2 text-sm text-white/80"
+                  >
+                    +30s
+                  </button>
                 </div>
-      
-                <div className="text-lg font-semibold text-white">
-                  {activeExercise?.name}
-                </div>
-      
-                <div className="mt-1 text-sm text-white/70">
-                  {activeExercise?.sets?.[activeSetIndex + 1]?.type}
-                </div>
-      
-                <div className="mt-3 text-base text-white">
-                  {formatTargetLine(
-                    activeExercise,
-                    activeExercise?.sets?.[activeSetIndex + 1]
-                  ).replace(/^Target ·\s*/, "")}
-                </div>
-              </div>
-              <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-3">
-        <div className="mb-2 text-[11px] uppercase tracking-[0.2em] text-white/50">
-          Exercise Remarks
-        </div>
-      
-        <textarea
-          value={activeExercise?.remarks || ""}
-          onChange={(e) =>
-            updateExerciseRemark(
-              activeWeekKey,
-              activeDayIndex,
-              activeExerciseIndex,
-              e.target.value
-            )
-          }
-          placeholder="Add notes for this set..."
-          rows={3}
-          className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white placeholder:text-white/30"
-        />
-      </div>
-              <div className="mb-3 grid grid-cols-4 gap-2">
                 <button
-                  onClick={() => setRestSeconds((prev) => Math.max(0, prev - 30))}
-                  className="rounded-xl border border-white/10 bg-black/20 py-2 text-sm text-white/80"
+                  onClick={() => setRestPaused((prev) => !prev)}
+                  className="w-full rounded-xl border border-white/10 bg-black/20 py-3 text-sm font-medium text-white"
                 >
-                  -30s
+                  {restPaused ? "Resume" : "Pause"}
                 </button>
-      
                 <button
-                  onClick={() => setRestSeconds((prev) => Math.max(0, prev - 15))}
-                  className="rounded-xl border border-white/10 bg-black/20 py-2 text-sm text-white/80"
+                  onClick={moveToNextWorkoutStep}
+                  className="w-full rounded-xl border border-white/10 bg-black/20 py-3 text-sm font-medium text-white"
                 >
-                  -15s
-                </button>
-      
-                <button
-                  onClick={() => setRestSeconds((prev) => prev + 15)}
-                  className="rounded-xl border border-white/10 bg-black/20 py-2 text-sm text-white/80"
-                >
-                  +15s
-                </button>
-      
-                <button
-                  onClick={() => setRestSeconds((prev) => prev + 30)}
-                  className="rounded-xl border border-white/10 bg-black/20 py-2 text-sm text-white/80"
-                >
-                  +30s
+                  Skip Rest
                 </button>
               </div>
-      
-              <button
-                onClick={() => setRestPaused((prev) => !prev)}
-                className="mb-3 w-full rounded-xl border border-white/10 bg-black/20 py-3 text-sm font-medium text-white"
-              >
-                {restPaused ? "Resume" : "Pause"}
-              </button>
-      
-              <button
-                onClick={moveToNextWorkoutStep}
-                className="w-full rounded-xl border border-white/10 bg-black/20 py-3 text-sm font-medium text-white"
-              >
-                Skip Rest
-              </button>
             </div>
-      
+
             <button
               onClick={() => setShowEndWorkoutConfirm(true)}
-              className="mt-4 rounded-2xl border border-red-500/30 bg-red-600/20 py-3 text-sm font-medium text-red-300"
+              className="shrink-0 rounded-2xl border border-red-500/30 bg-red-600/20 py-3 text-sm font-medium text-red-300"
             >
               End Workout
             </button>
           </div>
-      )}
+        )}
       {activeTab === "workout" &&
         workoutMode &&
         activeWorkoutScreen === "rest-exercise" && (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <div className="flex min-h-0 flex-1 flex-col rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
-              <div className="mb-4 flex items-center justify-between text-sm text-white/70">
-                <button
-                  onClick={() => setWorkoutMode(false)}
-                  className="text-xl leading-none text-white/70"
-                >
-                  ←
-                </button>
-      
-                <div className="text-center">
-                  <div className="text-lg font-semibold text-white">
-                    Next Exercise
-                  </div>
-                </div>
-      
-                <button
-                  onClick={() => setShowEndWorkoutConfirm(true)}
-                  className="text-xl leading-none text-white/70"
-                >
-                  ⋯
-                </button>
-              </div>
-      
-              <div className="mb-4 flex items-center justify-between text-xs text-white/60">
-                <div>Workout Time</div>
-      
-                <div className="font-mono text-sm text-white">
-                  {formatTime(workoutSeconds)}
-                </div>
-              </div>
-      
-              <div className="mb-6 flex justify-center">
-                <div className="flex h-48 w-48 items-center justify-center rounded-full border-4 border-green-500/50 bg-black/20">
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                <div className="mb-4 flex items-center justify-between text-sm text-white/70">
+                  <button
+                    onClick={() => setWorkoutMode(false)}
+                    className="text-xl leading-none text-white/70"
+                  >
+                    ←
+                  </button>
+
                   <div className="text-center">
-                    <div className="font-mono text-5xl text-white">
-                      {formatTime(restSeconds)}
+                    <div className="text-lg font-semibold text-white">
+                      Next Exercise
                     </div>
-      
-                    <div className="mt-2 text-[11px] uppercase tracking-[0.25em] text-white/50">
-                      Time Remaining
+                  </div>
+
+                  <button
+                    onClick={() => setShowEndWorkoutConfirm(true)}
+                    className="text-xl leading-none text-white/70"
+                  >
+                    ⋯
+                  </button>
+                </div>
+
+                <div className="mb-4 flex items-center justify-between text-xs text-white/60">
+                  <div>Workout Time</div>
+                  <div className="font-mono text-sm text-white">
+                    {formatTime(workoutSeconds)}
+                  </div>
+                </div>
+
+                <div className="mb-6 flex justify-center">
+                  <div className="flex h-40 w-40 items-center justify-center rounded-full border-4 border-green-500/50 bg-black/20 sm:h-48 sm:w-48">
+                    <div className="text-center">
+                      <div className="font-mono text-4xl text-white sm:text-5xl">
+                        {formatTime(restSeconds)}
+                      </div>
+                      <div className="mt-2 text-[11px] uppercase tracking-[0.25em] text-white/50">
+                        Time Remaining
+                      </div>
                     </div>
                   </div>
                 </div>
+
+                <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-center">
+                  <div className="mb-2 text-sm font-medium text-green-300">
+                    Coming Up
+                  </div>
+                  <div className="text-sm text-white/60">
+                    Exercise {activeExerciseIndex + 2} of{" "}
+                    {currentDay.exercises.length}
+                  </div>
+                  <div className="mt-2 break-words text-xl font-semibold text-white">
+                    {currentDay.exercises[activeExerciseIndex + 1]?.name}
+                  </div>
+                  <div className="mt-2 text-sm text-white/70">
+                    {currentDay.exercises[activeExerciseIndex + 1]?.sets
+                      ?.length || 0}{" "}
+                    Sets Planned
+                  </div>
+                  <div className="mt-4 text-sm text-white/60">
+                    First Set Target
+                  </div>
+                  <div className="text-base text-white">
+                    {formatTargetLine(
+                      currentDay.exercises[activeExerciseIndex + 1],
+                      currentDay.exercises[activeExerciseIndex + 1]?.sets?.[0]
+                    ).replace(/^Target ·\s*/, "")}
+                  </div>
+                </div>
+
+                <div className="mb-1 rounded-2xl border border-white/10 bg-black/20 p-3">
+                  <div className="mb-2 text-[11px] uppercase tracking-[0.2em] text-white/50">
+                    Exercise Remarks
+                  </div>
+                  <textarea
+                    value={activeExercise?.remarks || ""}
+                    onChange={(e) =>
+                      updateExerciseRemark(
+                        activeWeekKey,
+                        activeDayIndex,
+                        activeExerciseIndex,
+                        e.target.value
+                      )
+                    }
+                    placeholder="Add notes for this exercise..."
+                    rows={2}
+                    className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white placeholder:text-white/30"
+                  />
+                </div>
               </div>
-      
-              <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-center">
-                <div className="mb-2 text-sm font-medium text-green-300">
-                  Coming Up
+
+              <div className="mt-3 shrink-0 space-y-2 border-t border-white/10 pt-3">
+                <div className="grid grid-cols-4 gap-2">
+                  <button
+                    onClick={() =>
+                      setRestSeconds((prev) => Math.max(0, prev - 30))
+                    }
+                    className="rounded-xl border border-white/10 bg-black/20 py-2 text-sm text-white/80"
+                  >
+                    -30s
+                  </button>
+                  <button
+                    onClick={() =>
+                      setRestSeconds((prev) => Math.max(0, prev - 15))
+                    }
+                    className="rounded-xl border border-white/10 bg-black/20 py-2 text-sm text-white/80"
+                  >
+                    -15s
+                  </button>
+                  <button
+                    onClick={() => setRestSeconds((prev) => prev + 15)}
+                    className="rounded-xl border border-white/10 bg-black/20 py-2 text-sm text-white/80"
+                  >
+                    +15s
+                  </button>
+                  <button
+                    onClick={() => setRestSeconds((prev) => prev + 30)}
+                    className="rounded-xl border border-white/10 bg-black/20 py-2 text-sm text-white/80"
+                  >
+                    +30s
+                  </button>
                 </div>
-      
-                <div className="text-sm text-white/60">
-                  Exercise {activeExerciseIndex + 2} of {currentDay.exercises.length}
-                </div>
-      
-                <div className="mt-2 text-xl font-semibold text-white">
-                  {currentDay.exercises[activeExerciseIndex + 1]?.name}
-                </div>
-      
-                <div className="mt-2 text-sm text-white/70">
-                  {currentDay.exercises[activeExerciseIndex + 1]?.sets?.length || 0} Sets Planned
-                </div>
-      
-                <div className="mt-4 text-sm text-white/60">
-                  First Set Target
-                </div>
-      
-                <div className="text-base text-white">
-                  {formatTargetLine(
-                    currentDay.exercises[activeExerciseIndex + 1],
-                    currentDay.exercises[activeExerciseIndex + 1]?.sets?.[0]
-                  ).replace(/^Target ·\s*/, "")}
-                </div>
-              </div>
-      <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-3">
-        <div className="mb-2 text-[11px] uppercase tracking-[0.2em] text-white/50">
-          Exercise Remarks
-        </div>
-      
-        <textarea
-          value={activeExercise?.remarks || ""}
-          onChange={(e) =>
-            updateExerciseRemark(
-              activeWeekKey,
-              activeDayIndex,
-              activeExerciseIndex,
-              e.target.value
-            )
-          }
-          placeholder="Add notes for this exercise..."
-          rows={3}
-          className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white placeholder:text-white/30"
-        />
-      </div>
-              <div className="mb-3 grid grid-cols-4 gap-2">
                 <button
-                  onClick={() => setRestSeconds((prev) => Math.max(0, prev - 30))}
-                  className="rounded-xl border border-white/10 bg-black/20 py-2 text-sm text-white/80"
+                  onClick={() => setRestPaused((prev) => !prev)}
+                  className="w-full rounded-xl border border-white/10 bg-black/20 py-3 text-sm font-medium text-white"
                 >
-                  -30s
+                  {restPaused ? "Resume" : "Pause"}
                 </button>
-      
                 <button
-                  onClick={() => setRestSeconds((prev) => Math.max(0, prev - 15))}
-                  className="rounded-xl border border-white/10 bg-black/20 py-2 text-sm text-white/80"
+                  onClick={moveToNextWorkoutStep}
+                  className="w-full rounded-xl border border-white/10 bg-black/20 py-3 text-sm font-medium text-white"
                 >
-                  -15s
-                </button>
-      
-                <button
-                  onClick={() => setRestSeconds((prev) => prev + 15)}
-                  className="rounded-xl border border-white/10 bg-black/20 py-2 text-sm text-white/80"
-                >
-                  +15s
-                </button>
-      
-                <button
-                  onClick={() => setRestSeconds((prev) => prev + 30)}
-                  className="rounded-xl border border-white/10 bg-black/20 py-2 text-sm text-white/80"
-                >
-                  +30s
+                  Skip Rest
                 </button>
               </div>
-      
-              <button
-                onClick={() => setRestPaused((prev) => !prev)}
-                className="mb-3 w-full rounded-xl border border-white/10 bg-black/20 py-3 text-sm font-medium text-white"
-              >
-                {restPaused ? "Resume" : "Pause"}
-              </button>
-      
-              <button
-                onClick={moveToNextWorkoutStep}
-                className="w-full rounded-xl border border-white/10 bg-black/20 py-3 text-sm font-medium text-white"
-              >
-                Skip Rest
-              </button>
             </div>
-      
+
             <button
               onClick={() => setShowEndWorkoutConfirm(true)}
-              className="mt-4 rounded-2xl border border-red-500/30 bg-red-600/20 py-3 text-sm font-medium text-red-300"
+              className="shrink-0 rounded-2xl border border-red-500/30 bg-red-600/20 py-3 text-sm font-medium text-red-300"
             >
               End Workout
             </button>
           </div>
-      )}
+        )}
       {activeTab === "workout" &&
         activeWorkoutScreen === "stretch" && (
-          <div className="flex min-h-0 flex-1 flex-col justify-center">
+          <div className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto overscroll-contain py-2">
             <div className="rounded-3xl border border-sky-400/30 bg-black/50 p-5 backdrop-blur-md">
               <div className="text-[11px] uppercase tracking-[0.28em] text-sky-300/80 mb-2">
                 {stretchOnlyMode ? "Stretch session" : "After workout"}
@@ -1130,7 +1171,7 @@ const repDialValues = useMemo(
 
       {activeTab === "workout" &&
         activeWorkoutScreen === "summary" && (
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pb-2">
             <div className="rounded-3xl border border-white/10 bg-white/10 p-5 text-center backdrop-blur-md">
               <div className="mb-4 flex justify-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full border border-green-500/40 bg-green-500/10 text-3xl text-green-300">

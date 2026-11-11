@@ -20,6 +20,7 @@ import WorkoutPage from "./pages/WorkoutPage";
 import SettingsPage from "./pages/SettingsPage";
 import HistoryPage from "./pages/HistoryPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
+import ExerciseRepoPage from "./pages/ExerciseRepoPage";
 import { workoutData } from "./workoutData.js";
 import {
   createStretchEntry,
@@ -1613,6 +1614,8 @@ if (!isDataLoaded)
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
+          opacity: activeTab === "repo" ? 0.12 : 1,
+          transition: "opacity 200ms ease",
         }}
       />
 <div
@@ -1628,7 +1631,7 @@ if (!isDataLoaded)
     }
   `}
 >
-  <div className="mx-auto flex w-full max-w-md min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain px-3 pb-[max(0.75rem,0.5rem)] pt-1 sm:px-4">
+  <div className="mx-auto flex w-full max-w-md min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain px-3 pb-3 pt-1 sm:px-4">
 
 {activeTab === "history" ? (
 <HistoryPage
@@ -1646,6 +1649,12 @@ if (!isDataLoaded)
     workoutHistory={workoutHistory}
     setActiveScreen={setActiveScreen}
     setActiveTab={setActiveTab}
+  />
+) : activeTab === "repo" ? (
+  <ExerciseRepoPage
+    data={data}
+    setData={setData}
+    setActiveScreen={setActiveScreen}
   />
 ) : activeTab === "settings" ? (
   <SettingsPage

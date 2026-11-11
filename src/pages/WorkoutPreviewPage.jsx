@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { ArrowLeft, ChevronDown } from "lucide-react";
-import { getExerciseImage } from "../exerciseImages";
+import { resolveExerciseImage } from "../exerciseCatalog";
 import { playFootballWhistle, preloadWorkoutSounds } from "../sounds";
 import { getAmrapDurationMinutes, isAmrapDay } from "../schema";
 
@@ -332,7 +332,9 @@ export default function WorkoutPreviewPage(props) {
     const sets = exercise.sets || [];
     const visibleSets = sets.slice(0, 4);
     const extraSets = Math.max(0, sets.length - 4);
-    const exerciseImage = getExerciseImage(exercise);
+    const exerciseImage = resolveExerciseImage(exercise, data, {
+      routineName: selectedRoutineName,
+    });
 
     return (
     <div
@@ -348,8 +350,8 @@ export default function WorkoutPreviewPage(props) {
     >
       {/* IMAGE */}
       <div
-        className={`absolute right-0 top-0 h-full overflow-hidden transition-all duration-300 ${
-          isExpanded ? "w-[40%]" : "w-[34%]"
+        className={`absolute right-0 top-0 flex h-full items-center justify-center overflow-hidden bg-black/70 transition-all duration-300 ${
+          isExpanded ? "w-[44%]" : "w-[38%]"
         }`}
       >
         {exerciseImage ? (
@@ -358,18 +360,18 @@ export default function WorkoutPreviewPage(props) {
             alt=""
             loading="lazy"
             decoding="async"
-            className="h-full w-full object-cover"
+            className="h-full w-full object-contain"
           />
         ) : (
           <div className="h-full w-full bg-gradient-to-br from-[#1a1814] via-[#0d0d0d] to-black" />
         )}
-        <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-black/80 via-black/35 to-transparent" />
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-black/70 via-black/25 to-transparent" />
       </div>
 
       {/* CONTENT */}
       <div
         className={`relative p-4 transition-all duration-300 ${
-          isExpanded ? "pr-[42%]" : "pr-[36%]"
+          isExpanded ? "pr-[46%]" : "pr-[40%]"
         }`}
       >
         <div className="flex items-start gap-2.5">

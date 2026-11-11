@@ -10,11 +10,18 @@ import {
   X,
 } from "lucide-react";
 import { supabase } from "../supabaseClient";
-import { getExerciseImage } from "../exerciseImages";
+import {
+  findExistingCatalogMatch,
+  renameExerciseEverywhere,
+  resolveExerciseImage,
+  setRepoImageForName,
+  upsertRepoEntry,
+} from "../exerciseCatalog";
 import {
   uploadExerciseImage,
   deleteExerciseImageByUrl,
 } from "../exerciseImageUpload";
+import { normalizeExerciseName } from "../exerciseImages";
 import WheelDial, {
   buildRepValues,
   buildWeightValues,
@@ -97,13 +104,6 @@ function applyLoggingModeToSets(sets, mode) {
     }
     return next;
   });
-}
-
-function normalizeExerciseName(name) {
-  return String(name || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
 }
 
 function getPlannedLoad(set) {
@@ -288,6 +288,8 @@ export default function SettingsPage(props) {
   const [uploadingImageKey, setUploadingImageKey] = useState(null);
   const [routineMenuOpen, setRoutineMenuOpen] = useState(false);
   const [showProgramExport, setShowProgramExport] = useState(false);
+  const [showDeleteRoutineConfirm, setShowDeleteRoutineConfirm] =
+    useState(false);
   const [exportScope, setExportScope] = useState("all-routines");
   const [exportRoutineIndexes, setExportRoutineIndexes] = useState([]);
   const [exportDayRoutineIndex, setExportDayRoutineIndex] = useState(0);
@@ -323,6 +325,9 @@ const undoStackRef = useRef([]);
 const coalesceGateRef = useRef(0);
 const exerciseUndoStacksRef = useRef({});
 const exerciseCoalesceGateRef = useRef({});
+const lastPushedDataJsonRef = useRef(null);
+const applyingExternalDataRef = useRef(false);
+const nameBeforeEditRef = useRef({});
 const [canUndo, setCanUndo] = useState(false);
 const [exerciseUndoTick, setExerciseUndoTick] = useState(0);
 
@@ -456,47 +461,75 @@ function undoExerciseAt(dayIndex, exIndex) {
   }
 }
 
-useEffect(() => {
-  if (!data || isInitialized) return;
-
-  const cloned = JSON.parse(JSON.stringify(data));
+function normalizeProgramDraft(source) {
+  const cloned = JSON.parse(JSON.stringify(source || { routines: [] }));
   const routinesArray = Array.isArray(cloned.routines)
-  ? cloned.routines
-  : Object.values(cloned.routines || {});
+    ? cloned.routines
+    : Object.values(cloned.routines || {});
 
-routinesArray.forEach(r => {
+  routinesArray.forEach((r) => {
     r.days = r.days || [];
-    r.days.forEach(d => {
+    r.days.forEach((d) => {
       d.exercises = d.exercises || [];
-      d.exercises.forEach(ex => {
+      d.exercises.forEach((ex) => {
         ex.sets = ex.sets || [];
       });
     });
   });
-  
+
   cloned.routines = routinesArray;
+  return cloned;
+}
+
+useEffect(() => {
+  if (!data || isInitialized) return;
+
+  const cloned = normalizeProgramDraft(data);
 
   undoStackRef.current = [];
   setCanUndo(false);
   coalesceGateRef.current = 0;
   clearExerciseUndoStacks();
   setDraftProgramRaw(cloned);
-  setIsInitialized(true); // ✅ runs ONLY once
+  lastPushedDataJsonRef.current = JSON.stringify(cloned);
+  setIsInitialized(true);
 }, [data, isInitialized]);
 
 useEffect(() => {
   if (!isInitialized) return;
-
+  if (applyingExternalDataRef.current) return;
   if (!draftProgram || !draftProgram.routines) return;
-
-  // prevent empty overwrite
   if (draftProgram.routines.length === 0) return;
 
-  // 🔴 ONLY update if different
-  if (JSON.stringify(draftProgram) !== JSON.stringify(data)) {
-    setData(draftProgram);
+  const merged = {
+    ...draftProgram,
+    exerciseRepo: draftProgram.exerciseRepo ?? data?.exerciseRepo,
+  };
+  const mergedJson = JSON.stringify(merged);
+  if (mergedJson === JSON.stringify(data)) {
+    lastPushedDataJsonRef.current = mergedJson;
+    return;
   }
+
+  lastPushedDataJsonRef.current = mergedJson;
+  setData(merged);
 }, [draftProgram]);
+
+// Pull Repo (and other external) edits back into the Settings draft.
+useEffect(() => {
+  if (!isInitialized || !data) return;
+  const dataJson = JSON.stringify(data);
+  if (dataJson === lastPushedDataJsonRef.current) return;
+
+  applyingExternalDataRef.current = true;
+  const cloned = normalizeProgramDraft(data);
+  setDraftProgramRaw(cloned);
+  lastPushedDataJsonRef.current = JSON.stringify(cloned);
+  clearExerciseUndoStacks();
+  Promise.resolve().then(() => {
+    applyingExternalDataRef.current = false;
+  });
+}, [data, isInitialized]);
 
 const [saveStatus, setSaveStatus] = useState("");
 useEffect(() => {
@@ -745,15 +778,24 @@ function addRoutine() {
   setRoutineMenuOpen(false);
 }
 
-function deleteActiveRoutine() {
-  const list = draftProgram.routines;
+function requestDeleteActiveRoutine() {
+  const list = draftProgram?.routines || [];
 
-  if (list.length === 1) {
+  if (list.length <= 1) {
     alert("At least one routine is required.");
     return;
   }
 
-  if (!confirm(`Delete ${selectedRoutineName}?`)) return;
+  setShowDeleteRoutineConfirm(true);
+}
+
+function confirmDeleteActiveRoutine() {
+  const list = draftProgram?.routines || [];
+  if (list.length <= 1) {
+    setShowDeleteRoutineConfirm(false);
+    alert("At least one routine is required.");
+    return;
+  }
 
   const updated = { ...draftProgram };
   const updatedRoutinesArray = [...updated.routines];
@@ -762,6 +804,7 @@ function deleteActiveRoutine() {
   setDraftProgram(updated);
   setActiveRoutineIndex((prev) => Math.max(0, prev - 1));
   setRoutineMenuOpen(false);
+  setShowDeleteRoutineConfirm(false);
 }
 
 function updateExerciseAt(dayIndex, exIndex, updater, options = {}) {
@@ -881,14 +924,18 @@ async function handleExerciseImageSelected(event) {
   setUploadingImageKey(key);
 
   try {
-    const previousUrl = exercise.image;
+    const previousUrl =
+      typeof exercise.image === "string" && exercise.image.startsWith("http")
+        ? exercise.image
+        : null;
     const { url } = await uploadExerciseImage(file, {
       name: exercise.name || "exercise",
     });
 
-    updateExerciseAt(dayIndex, exIndex, (ex) => {
-      ex.image = url;
-    });
+    // Write through repo + every matching exercise name across the program.
+    setDraftProgram((prev) =>
+      setRepoImageForName(prev, exercise.name || "New Exercise", url)
+    );
 
     if (previousUrl && previousUrl !== url) {
       await deleteExerciseImageByUrl(previousUrl);
@@ -907,13 +954,19 @@ async function removeExerciseImage(dayIndex, exIndex) {
       ?.exercises?.[exIndex];
   if (!exercise?.image) return;
 
-  if (!confirm("Remove this custom exercise image?")) return;
+  if (
+    !confirm(
+      `Remove the custom image for "${exercise.name}" everywhere (repo + all routines)?`
+    )
+  ) {
+    return;
+  }
 
   const previousUrl = exercise.image;
 
-  updateExerciseAt(dayIndex, exIndex, (ex) => {
-    delete ex.image;
-  });
+  setDraftProgram((prev) =>
+    setRepoImageForName(prev, exercise.name || "New Exercise", null)
+  );
 
   await deleteExerciseImageByUrl(previousUrl);
 }
@@ -1115,7 +1168,7 @@ return (
   {/* RIGHT — Delete routine */}
   <button
     type="button"
-    onClick={deleteActiveRoutine}
+    onClick={requestDeleteActiveRoutine}
     className="inline-flex items-center justify-center px-3 py-2 rounded-2xl bg-black/60 backdrop-blur-md text-red-400 border border-white/10 hover:bg-black/70 hover:text-red-300 active:scale-[0.97] transition"
   >
     <Trash2 size={16} />
@@ -1359,19 +1412,21 @@ setDraftProgram((prev) => {
   {(() => {
     const imageKey = `${dayIndex}-${exIndex}`;
     const isUploading = uploadingImageKey === imageKey;
-    const previewSrc = getExerciseImage(exercise);
+    const previewSrc = resolveExerciseImage(exercise, draftProgram, {
+      routineName: selectedRoutineName,
+    });
     const hasCustomImage = Boolean(exercise.image);
 
     return (
       <div
-        className="shrink-0 w-14 flex flex-col items-center gap-1"
+        className="flex w-24 shrink-0 flex-col items-center gap-1"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
           disabled={isUploading}
           onClick={() => openExerciseImagePicker(dayIndex, exIndex)}
-          className="relative h-14 w-14 overflow-hidden rounded-xl border border-white/10 bg-black/50 transition active:scale-[0.97] disabled:opacity-60"
+          className="relative h-14 w-24 overflow-hidden rounded-xl border border-white/10 bg-black/70 transition active:scale-[0.97] disabled:opacity-60"
           title={hasCustomImage ? "Replace image" : "Upload image"}
         >
           {previewSrc ? (
@@ -1380,7 +1435,7 @@ setDraftProgram((prev) => {
               alt=""
               loading="lazy"
               decoding="async"
-              className="h-full w-full object-cover"
+              className="h-full w-full object-contain"
             />
           ) : (
             <span className="flex h-full w-full items-center justify-center text-white/35">
@@ -1409,6 +1464,10 @@ setDraftProgram((prev) => {
       type="text"
       value={exercise.name ?? ""}
       onClick={(e) => e.stopPropagation()}
+      onFocus={() => {
+        nameBeforeEditRef.current[`${dayIndex}-${exIndex}`] =
+          exercise.name || "";
+      }}
       onChange={(e) => {
         const value = e.target.value;
         updateExerciseAt(
@@ -1422,23 +1481,83 @@ setDraftProgram((prev) => {
       }}
       onBlur={(e) => {
         setTimeout(() => {
+          const editKey = `${dayIndex}-${exIndex}`;
           const rawName = e.target.value.trim();
           const nextName = rawName || "New Exercise";
+          const fromName =
+            nameBeforeEditRef.current[editKey] || nextName;
 
-          updateExerciseAt(dayIndex, exIndex, (ex) => {
-            ex.name = nextName;
+          let reuseImage = null;
+          if (rawName && rawName !== "New Exercise") {
+            const current =
+              draftProgram?.routines?.[activeRoutineIndex]?.days?.[dayIndex]
+                ?.exercises?.[exIndex];
+            if (!current?.image) {
+              const match = findExistingCatalogMatch(draftProgram, nextName);
+              if (match?.image) {
+                const ok = confirm(
+                  match.reason === "similar"
+                    ? `"${nextName}" looks like "${match.name}", which already has an image. Use that image?`
+                    : `"${match.name}" already has an image. Use it for this exercise?`
+                );
+                if (ok) reuseImage = match.image;
+              }
+            }
+          }
 
-            if (!rawName || rawName === "New Exercise") return;
-            if (!isBlankPrescription(ex)) return;
+          setDraftProgram((prev) => {
+            const current =
+              prev?.routines?.[activeRoutineIndex]?.days?.[dayIndex]
+                ?.exercises?.[exIndex];
+            if (!current) return prev;
+
+            let next = prev;
+            const renamed =
+              normalizeExerciseName(fromName) !==
+              normalizeExerciseName(nextName);
+
+            if (renamed && fromName && fromName !== "New Exercise") {
+              next = renameExerciseEverywhere(next, {
+                fromNames: [fromName],
+                toName: nextName,
+                keepAliases: true,
+                ...(reuseImage ? { image: reuseImage } : {}),
+              });
+            } else {
+              next = JSON.parse(JSON.stringify(next));
+              const ex =
+                next.routines[activeRoutineIndex].days[dayIndex].exercises[
+                  exIndex
+                ];
+              ex.name = nextName;
+              if (reuseImage) ex.image = reuseImage;
+              const imageCandidate = reuseImage || ex.image;
+              next = upsertRepoEntry(next, {
+                name: nextName,
+                image:
+                  typeof imageCandidate === "string" &&
+                  imageCandidate.startsWith("http")
+                    ? imageCandidate
+                    : undefined,
+              });
+            }
+
+            const ex =
+              next.routines?.[activeRoutineIndex]?.days?.[dayIndex]
+                ?.exercises?.[exIndex];
+            if (!ex) return next;
+
+            if (!rawName || rawName === "New Exercise") return next;
+            if (!isBlankPrescription(ex)) return next;
 
             const latest = findLatestHistoryExercise(
               workoutHistory,
               nextName
             );
-            if (!latest) return;
+            if (!latest) return next;
 
             const prefills = setsFromHistoryExercise(latest.exercise);
-            if (!prefills.length) return;
+            if (!prefills.length) return next;
 
             ex.sets = prefills;
             ex.loggingMode = inferLoggingMode({
@@ -1446,6 +1565,7 @@ setDraftProgram((prev) => {
               sets: prefills,
               loggingMode: undefined,
             });
+            return next;
           });
 
           setSearchTerm("");
@@ -1526,7 +1646,13 @@ setDraftProgram((prev) => {
   onClick={(e) => {
   e.stopPropagation();
 
-  if (!confirm("Delete this exercise and all its sets?")) return;
+  if (
+    !confirm(
+      "Remove this exercise from this day?\n\nIt will stay in the Exercise Repo for later."
+    )
+  ) {
+    return;
+  }
 
   const currentExercises =
     draftProgram?.routines?.[activeRoutineIndex]?.days?.[dayIndex]
@@ -1539,10 +1665,23 @@ setDraftProgram((prev) => {
   clearExerciseUndoStacks(`${activeRoutineIndex}:${dayIndex}:`);
   setDraftProgram((prev) => {
     const updated = JSON.parse(JSON.stringify(prev));
-    updated.routines[activeRoutineIndex].days[dayIndex].exercises.splice(
-      exIndex,
-      1
-    );
+    const exercises =
+      updated.routines[activeRoutineIndex].days[dayIndex].exercises;
+    const removed = exercises[exIndex];
+    exercises.splice(exIndex, 1);
+
+    // Keep a repo entry so the exercise remains available later.
+    if (removed?.name) {
+      return upsertRepoEntry(updated, {
+        name: removed.name,
+        image:
+          typeof removed.image === "string" &&
+          removed.image.startsWith("http")
+            ? removed.image
+            : undefined,
+      });
+    }
+
     return updated;
   });
 }}
@@ -2014,6 +2153,39 @@ className={`mt-4 w-full rounded-2xl p-3 text-sm font-medium text-white ${
           }}
         />
       </div>
+
+      {showDeleteRoutineConfirm ? (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/80 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-8 backdrop-blur-sm sm:items-center">
+          <div className="w-full max-w-md rounded-3xl border border-red-400/35 bg-[#0c0c0c] p-4 shadow-2xl shadow-black/60">
+            <div className="mb-2 text-lg font-semibold text-white">
+              Delete routine?
+            </div>
+            <div className="mb-4 text-sm text-white/70">
+              Delete the entire routine{" "}
+              <span className="font-medium text-white">
+                &quot;{selectedRoutineName}&quot;
+              </span>
+              ? This removes all of its days, exercises, and sets.
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteRoutineConfirm(false)}
+                className="flex-1 rounded-xl border border-white/15 bg-black/40 py-3 text-sm font-medium text-white/85 transition active:scale-[0.98] hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteActiveRoutine}
+                className="flex-1 rounded-xl border border-red-400/40 bg-red-600/90 py-3 text-sm font-semibold text-white transition active:scale-[0.98] hover:bg-red-500"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showProgramExport ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-8 backdrop-blur-sm sm:items-center">
