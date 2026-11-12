@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { resolveExerciseImage } from "../exerciseCatalog";
-import { playFootballWhistle, preloadWorkoutSounds } from "../sounds";
+import { playFootballWhistle } from "../sounds";
 import { getAmrapDurationMinutes, isAmrapDay } from "../schema";
 
 const LAST_DAYS_KEY = "routine-last-days";
@@ -466,7 +466,6 @@ export default function WorkoutPreviewPage(props) {
         setActiveWorkoutScreen(saved?.activeWorkoutScreen || "active");
         setActiveTab("workout");
         setWorkoutMode(true);
-        preloadWorkoutSounds();
         playFootballWhistle();
       }}
       className="w-full rounded-xl p-3.5 text-sm font-semibold border border-[#c7a86a55] bg-transparent text-[#d7c7a4] transition-all duration-150 active:scale-[0.97]"

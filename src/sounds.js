@@ -1,51 +1,30 @@
-import refereeWhistle from "./Assets/sounds/ui/referee-whistle.wav";
-import restEndBell from "./Assets/sounds/rest-complete/timer-end-bell.mp3";
+/**
+ * Workout alerts are vibration-only so audiobooks / other audio keep playing.
+ */
 
-let whistleAudio = null;
-let restBellAudio = null;
-
-function ensureAudio(existing, src) {
-  if (existing) return existing;
-  const audio = new Audio(src);
-  audio.preload = "auto";
-  audio.load();
-  return audio;
-}
-
-function playClip(existing, src) {
+export function vibrateAlert(pattern = [180, 80, 180]) {
   try {
-    const audio = ensureAudio(existing, src);
-    audio.pause();
-    audio.currentTime = 0;
-    const playPromise = audio.play();
-    if (playPromise?.catch) {
-      playPromise.catch((err) => {
-        console.warn("Could not play sound", err);
-      });
-    }
-    return audio;
-  } catch (err) {
-    console.warn("Could not play sound", err);
-    return existing;
+    if (typeof navigator === "undefined" || !navigator.vibrate) return false;
+    return Boolean(navigator.vibrate(pattern));
+  } catch {
+    return false;
   }
 }
 
-/** Call on Start/Resume so rest bell is ready before timer ends. */
-export function preloadWorkoutSounds() {
-  whistleAudio = ensureAudio(whistleAudio, refereeWhistle);
-  restBellAudio = ensureAudio(restBellAudio, restEndBell);
-}
+/** No-op: audio is intentionally disabled. */
+export function preloadWorkoutSounds() {}
 
-/** Referee whistle for start, resume, and finish. */
+/** Start / resume / finish cue. */
 export function playFootballWhistle() {
-  preloadWorkoutSounds();
-  whistleAudio = playClip(whistleAudio, refereeWhistle);
+  vibrateAlert([120, 60, 120]);
 }
 
-/** Rest-complete bell (original timer-end clip). */
+/** Rest / timer-complete cue. */
+export function playTimerAlert() {
+  vibrateAlert([220, 100, 220, 100, 220]);
+}
+
+/** @deprecated Prefer playTimerAlert() */
 export function playRestBeep() {
-  restBellAudio = playClip(
-    ensureAudio(restBellAudio, restEndBell),
-    restEndBell
-  );
+  playTimerAlert();
 }

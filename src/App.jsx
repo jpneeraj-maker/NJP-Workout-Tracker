@@ -37,8 +37,7 @@ import {
 import appBackground from "./app-background.png";
 import {
   playFootballWhistle,
-  playRestBeep,
-  preloadWorkoutSounds,
+  playTimerAlert,
 } from "./sounds";
 
 function SortableExerciseCard({ id, children }) {
@@ -530,14 +529,12 @@ useEffect(() => {
     return;
   }
 
-  preloadWorkoutSounds();
-
   const interval = setInterval(() => {
     setAmrapSecondsRemaining((prev) => {
       if (prev <= 1) {
         if (!amrapCompletedRef.current) {
           amrapCompletedRef.current = true;
-          playFootballWhistle();
+          playTimerAlert();
           queueMicrotask(() => {
             openAmrapPartialEntry();
           });
@@ -574,15 +571,13 @@ useEffect(() => {
     return;
   }
 
-  preloadWorkoutSounds();
-
   const interval = setInterval(() => {
     setRestSeconds((prev) => {
       if (prev <= 1) {
-        // Fire beep on the 1 → 0 tick so it isn't delayed by a later effect.
+        // Fire alert on the 1 → 0 tick so it isn't delayed by a later effect.
         if (!restCompletedRef.current) {
           restCompletedRef.current = true;
-          playRestBeep();
+          playTimerAlert();
           queueMicrotask(() => {
             moveToNextWorkoutStep();
           });
@@ -815,7 +810,6 @@ function startWorkout() {
   }
 
   playFootballWhistle();
-  preloadWorkoutSounds();
 
   const day = data?.routines?.[selectedRoutine]?.days?.[selectedDay];
   const amrap = isAmrapDay(day);
