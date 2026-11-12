@@ -22,6 +22,18 @@ import {
   deleteExerciseImageByUrl,
 } from "../exerciseImageUpload";
 import { normalizeExerciseName } from "../exerciseImages";
+import {
+  appendCloudSnapshot,
+  countProgramExercises,
+  evaluateCloudWriteSafety,
+  isBackupPayloadRich,
+  isCloudWriteFrozen,
+  listLocalRollingBackups,
+  loadLocalRollingBackup,
+  rememberGoodCloudMeta,
+  saveLocalRollingBackup,
+  setCloudWriteFrozen,
+} from "../cloudSafety";
 import WheelDial, {
   buildRepValues,
   buildWeightValues,
@@ -982,21 +994,145 @@ const exerciseLibrary = [
 ];
 const [searchTerm, setSearchTerm] = useState("");
 
+function buildBackupPayload() {
+  return {
+    workoutPlans: data,
+    workoutHistory,
+    activeWorkoutState: JSON.parse(
+      localStorage.getItem("active-workout-state") || "{}"
+    ),
+    selectedRoutine,
+    selectedDay,
+    exportDate: new Date().toISOString(),
+    version: 1,
+  };
+}
+
+function downloadBackupPayload(backupData, filenamePrefix = "workout-backup") {
+  const json = JSON.stringify(backupData, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const date = new Date().toISOString().slice(0, 10);
+  link.href = url;
+  link.download = `${filenamePrefix}-${date}.json`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function handleExportBackup() {
+  const backupData = buildBackupPayload();
+  if (!isBackupPayloadRich(backupData)) {
+    alert(
+      "Export blocked: program has 0 exercises (empty shell).\n\nHistory alone is not enough for a restore backup. Rebuild at least one routine day first, or restore from a local rolling backup."
+    );
+    return;
+  }
+  downloadBackupPayload(backupData);
+}
+
+function handleRestoreLocalBackup() {
+  const backups = listLocalRollingBackups();
+  if (!backups.length) {
+    alert("No local rolling backups found yet.");
+    return;
+  }
+
+  const lines = backups
+    .slice(0, 10)
+    .map(
+      (b, i) =>
+        `${i + 1}. ${b.savedAt || "?"} · ${b.exerciseCount} exercises · ${b.historyLength} history · ${b.label || "auto"}`
+    )
+    .join("\n");
+
+  const pick = prompt(
+    `Local rolling backups (newest first).\nEnter 1–${Math.min(10, backups.length)} to restore:\n\n${lines}`
+  );
+  if (!pick) return;
+  const index = Number(pick) - 1;
+  if (!Number.isFinite(index) || index < 0 || index >= backups.length) {
+    alert("Invalid selection.");
+    return;
+  }
+
+  const payload = loadLocalRollingBackup(backups[index].id);
+  if (!payload?.workoutPlans || !Array.isArray(payload.workoutHistory)) {
+    alert("That backup could not be loaded.");
+    return;
+  }
+
+  if (
+    !confirm(
+      `Restore local backup from ${backups[index].savedAt}?\n${backups[index].exerciseCount} exercises · ${backups[index].historyLength} history entries.\n\nThe app will reload.`
+    )
+  ) {
+    return;
+  }
+
+  const importedPlans = payload.workoutPlans;
+  if (importedPlans?.routines && !Array.isArray(importedPlans.routines)) {
+    importedPlans.routines = Object.values(importedPlans.routines);
+  }
+
+  localStorage.setItem("workout-app-data", JSON.stringify(importedPlans));
+  localStorage.setItem(
+    "workout-history",
+    JSON.stringify(payload.workoutHistory)
+  );
+  localStorage.setItem(
+    "active-workout-state",
+    JSON.stringify(payload.activeWorkoutState || {})
+  );
+  if (payload.selectedRoutine !== undefined) {
+    localStorage.setItem("selected-routine", String(payload.selectedRoutine));
+  }
+  if (payload.selectedDay !== undefined) {
+    localStorage.setItem("selected-day", String(payload.selectedDay));
+  }
+
+  alert("Local backup restored. Reloading…");
+  window.location.reload();
+}
+
 async function handleUploadToCloud() {
   try {
+    if (isCloudWriteFrozen()) {
+      const unfreeze = confirm(
+        "Cloud writes are frozen to protect against overwriting recoverable data.\n\nOnly continue after you have rebuilt (or restored) a full program and exported a good backup.\n\nUnfreeze and upload now?"
+      );
+      if (!unfreeze) return;
+      setCloudWriteFrozen(false);
+    }
+
     console.log("MANUAL UPLOAD START");
 
-    const backupData = {
-      workoutPlans: data,
-      workoutHistory,
-      activeWorkoutState: JSON.parse(
-        localStorage.getItem("active-workout-state") || "{}"
-      ),
-      selectedRoutine,
-      selectedDay,
-      exportDate: new Date().toISOString(),
-      version: 1,
-    };
+    const backupData = buildBackupPayload();
+    let safety = evaluateCloudWriteSafety({
+      program: data,
+      history: workoutHistory,
+    });
+
+    if (!safety.ok && safety.reason === "richness_regression") {
+      const force = confirm(
+        `${safety.message}\n\nForce overwrite cloud with this thinner program?`
+      );
+      if (!force) return;
+      safety = evaluateCloudWriteSafety({
+        program: data,
+        history: workoutHistory,
+        force: true,
+      });
+    }
+
+    if (!safety.ok) {
+      alert(safety.message || "Upload blocked for safety.");
+      return;
+    }
+
+    saveLocalRollingBackup(backupData, "manual-upload");
 
     const { error } = await supabase
       .from("workout_data")
@@ -1007,8 +1143,22 @@ async function handleUploadToCloud() {
 
     if (error) throw error;
 
+    rememberGoodCloudMeta({
+      exerciseCount: safety.exerciseCount,
+      historyLength: safety.historyLength,
+    });
+
+    await appendCloudSnapshot(supabase, {
+      payload: backupData,
+      exerciseCount: safety.exerciseCount,
+      historyLength: safety.historyLength,
+      source: "manual-upload",
+    });
+
     console.log("MANUAL UPLOAD SUCCESS");
-    alert("Uploaded to cloud successfully");
+    alert(
+      `Uploaded to cloud successfully (${safety.exerciseCount} exercises, ${safety.historyLength} history).`
+    );
   } catch (err) {
     console.error("Manual upload failed", err);
     alert("Upload failed");
@@ -1997,6 +2147,14 @@ setDraftProgram((prev) => {
 
       <div className="mt-6 mb-4 rounded-3xl border border-white/10 bg-black/55 backdrop-blur-md p-4">
 
+        {isCloudWriteFrozen() ? (
+          <div className="mb-3 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-3 py-2.5 text-[12px] leading-snug text-amber-100">
+            Cloud writes are frozen while you rebuild. History and local data
+            stay put. Autosave will not overwrite Supabase. Export a good
+            backup after rebuilding, then use Cloud Upload once.
+          </div>
+        ) : null}
+
         <button
           type="button"
           onClick={openProgramExport}
@@ -2006,41 +2164,9 @@ setDraftProgram((prev) => {
           Download program (.txt)
         </button>
 
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
           <button
-            onClick={() => {
-              const backupData = {
-                workoutPlans: data,
-                workoutHistory,
-                activeWorkoutState: JSON.parse(
-                  localStorage.getItem("active-workout-state") || "{}"
-                ),
-                selectedRoutine,
-                selectedDay,
-                exportDate: new Date().toISOString(),
-                version: 1,
-              };
-
-              const json = JSON.stringify(backupData, null, 2);
-
-              const blob = new Blob([json], {
-                type: "application/json",
-              });
-
-              const url = URL.createObjectURL(blob);
-              const link = document.createElement("a");
-
-              const date = new Date().toISOString().slice(0, 10);
-
-              link.href = url;
-              link.download = `workout-backup-${date}.json`;
-
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-
-              URL.revokeObjectURL(url);
-            }}
+            onClick={handleExportBackup}
             className="rounded-2xl border border-stone-400/35 bg-stone-500/10 p-3 text-sm font-medium text-stone-100 transition-all duration-200 active:scale-[0.98]"
           >
             Export Backup
@@ -2055,6 +2181,12 @@ setDraftProgram((prev) => {
             className="rounded-2xl border border-blue-500/30 bg-blue-600/20 p-3 text-sm font-medium text-blue-300 transition-all duration-200 active:scale-[0.98]"
           >
             Import Backup
+          </button>
+          <button
+            onClick={handleRestoreLocalBackup}
+            className="rounded-2xl border border-violet-400/35 bg-violet-500/10 p-3 text-sm font-medium text-violet-100 transition-all duration-200 active:scale-[0.98]"
+          >
+            Restore Local Backup
           </button>
           <button
             onClick={handleUploadToCloud}
@@ -2104,6 +2236,14 @@ className={`mt-4 w-full rounded-2xl p-3 text-sm font-medium text-white ${
                 ) {
                   alert("Invalid backup file");
                   return;
+                }
+
+                const exerciseCount = countProgramExercises(parsed.workoutPlans);
+                if (exerciseCount <= 0) {
+                  const keepGoing = confirm(
+                    "This backup has 0 exercises in workoutPlans (empty shell).\nHistory may still be present.\n\nImporting it will replace your current routines with empty days.\n\nContinue anyway?"
+                  );
+                  if (!keepGoing) return;
                 }
 
                 const importedPlans = parsed.workoutPlans;

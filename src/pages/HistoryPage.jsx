@@ -19,6 +19,8 @@ import {
   formatDurationSeconds,
   formatHistorySessionTitle,
   getEntryDurationSeconds,
+  getHistoryDayName,
+  getHistoryRoutineName,
   getLocalSaveKey,
   groupHistoryByDate,
   isAmrapDay,
@@ -247,6 +249,9 @@ export default function HistoryPage(props) {
     const seconds = getEntryDurationSeconds(next);
     next.durationSeconds = seconds;
     next.duration = formatDurationSeconds(seconds) || next.duration || "";
+    next.routineName = String(next.routineName || "").trim();
+    next.workoutType = String(next.workoutType || "").trim();
+    if (next.workoutType) next.day = next.workoutType;
 
     if (isAmrapWorkout(next)) {
       next.type = "amrap";
@@ -542,8 +547,18 @@ export default function HistoryPage(props) {
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => {
+                        const draft = structuredClone(selectedSession);
+                        // Prefill title fields from display helpers so older
+                        // entries (week-index fallbacks) are editable as text.
+                        if (!String(draft.routineName || "").trim()) {
+                          draft.routineName =
+                            getHistoryRoutineName(draft, routines) || "";
+                        }
+                        if (!String(draft.workoutType || "").trim()) {
+                          draft.workoutType = getHistoryDayName(draft) || "";
+                        }
                         setIsEditing(true);
-                        setEditableWorkout(structuredClone(selectedSession));
+                        setEditableWorkout(draft);
                         setPendingDelete(null);
                       }}
                       className="inline-flex items-center justify-center p-2 rounded-lg border border-[#c7a86a40] bg-black/40 text-[#d7c7a4] hover:bg-[#c7a86a22] transition"
@@ -563,45 +578,79 @@ export default function HistoryPage(props) {
               </div>
 
               {isEditing ? (
-                <div className="grid grid-cols-2 gap-y-2 mb-4 text-sm">
-                  <div className="text-white/60 text-xs flex items-center gap-2">
-                    Duration:
-                    <input
-                      type="text"
-                      value={activeWorkout.duration || ""}
-                      onChange={(e) => {
-                        const updated = structuredClone(editableWorkout);
-                        updated.duration = e.target.value;
-                        updated.durationSeconds = parseDurationToSeconds(
-                          e.target.value
-                        );
-                        setEditableWorkout(updated);
-                      }}
-                      placeholder="mm:ss"
-                      className="bg-white/10 text-white px-2 py-1 rounded w-24 border border-[#c7a86a33]"
-                    />
+                <div className="mb-4 space-y-3 text-sm">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <label className="block text-white/60 text-xs">
+                      Routine name
+                      <input
+                        type="text"
+                        value={activeWorkout.routineName || ""}
+                        onChange={(e) => {
+                          const updated = structuredClone(editableWorkout);
+                          updated.routineName = e.target.value;
+                          setEditableWorkout(updated);
+                        }}
+                        placeholder="e.g. PPL 5 Day"
+                        className="mt-1 w-full bg-white/10 text-white px-2 py-1.5 rounded border border-[#c7a86a33]"
+                      />
+                    </label>
+                    <label className="block text-white/60 text-xs">
+                      Day name
+                      <input
+                        type="text"
+                        value={activeWorkout.workoutType || ""}
+                        onChange={(e) => {
+                          const updated = structuredClone(editableWorkout);
+                          updated.workoutType = e.target.value;
+                          updated.day = e.target.value;
+                          setEditableWorkout(updated);
+                        }}
+                        placeholder="e.g. Push A"
+                        className="mt-1 w-full bg-white/10 text-white px-2 py-1.5 rounded border border-[#c7a86a33]"
+                      />
+                    </label>
                   </div>
 
-                  <div className="text-right text-white/60 text-xs flex items-center justify-end gap-2">
-                    {isAmrapWorkout(activeWorkout) ? (
-                      <>
-                        Circuits:
-                        <input
-                          type="number"
-                          min="0"
-                          value={activeWorkout.circuitsCompleted ?? 0}
-                          onChange={(e) => {
-                            const updated = structuredClone(editableWorkout);
-                            updated.circuitsCompleted =
-                              Number(e.target.value) || 0;
-                            setEditableWorkout(updated);
-                          }}
-                          className="bg-white/10 text-white px-2 py-1 rounded w-16 border border-[#c7a86a33] text-right"
-                        />
-                      </>
-                    ) : (
-                      `Exercises: ${activeWorkout.exercises?.length || 0}`
-                    )}
+                  <div className="grid grid-cols-2 gap-y-2">
+                    <div className="text-white/60 text-xs flex items-center gap-2">
+                      Duration:
+                      <input
+                        type="text"
+                        value={activeWorkout.duration || ""}
+                        onChange={(e) => {
+                          const updated = structuredClone(editableWorkout);
+                          updated.duration = e.target.value;
+                          updated.durationSeconds = parseDurationToSeconds(
+                            e.target.value
+                          );
+                          setEditableWorkout(updated);
+                        }}
+                        placeholder="mm:ss"
+                        className="bg-white/10 text-white px-2 py-1 rounded w-24 border border-[#c7a86a33]"
+                      />
+                    </div>
+
+                    <div className="text-right text-white/60 text-xs flex items-center justify-end gap-2">
+                      {isAmrapWorkout(activeWorkout) ? (
+                        <>
+                          Circuits:
+                          <input
+                            type="number"
+                            min="0"
+                            value={activeWorkout.circuitsCompleted ?? 0}
+                            onChange={(e) => {
+                              const updated = structuredClone(editableWorkout);
+                              updated.circuitsCompleted =
+                                Number(e.target.value) || 0;
+                              setEditableWorkout(updated);
+                            }}
+                            className="bg-white/10 text-white px-2 py-1 rounded w-16 border border-[#c7a86a33] text-right"
+                          />
+                        </>
+                      ) : (
+                        `Exercises: ${activeWorkout.exercises?.length || 0}`
+                      )}
+                    </div>
                   </div>
                 </div>
               ) : selectedStretch ? (

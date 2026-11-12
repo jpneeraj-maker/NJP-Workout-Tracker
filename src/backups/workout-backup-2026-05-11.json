@@ -1,0 +1,1366 @@
+{
+  "workoutPlans": {
+    "routines": {
+      "0": {
+        "days": [
+          {
+            "name": "Push A",
+            "exercises": [
+              {
+                "name": "DB Bench Press",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": 16,
+                    "actualWeight": "16",
+                    "actualReps": "15"
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 18,
+                    "actualWeight": "18",
+                    "actualReps": "15"
+                  },
+                  {
+                    "reps": 8,
+                    "weight": 20,
+                    "actualWeight": "20.5",
+                    "actualReps": "12"
+                  },
+                  {
+                    "reps": 8,
+                    "weight": 20,
+                    "actualWeight": "20.5",
+                    "actualReps": "10"
+                  }
+                ]
+              },
+              {
+                "name": "DB Incline Press",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": 13.5,
+                    "actualWeight": "16",
+                    "actualReps": "12"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 16,
+                    "actualWeight": "18",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 18,
+                    "actualWeight": "18",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 18
+                  }
+                ]
+              },
+              {
+                "name": "DB Shoulder Press",
+                "sets": [
+                  {
+                    "reps": 10,
+                    "weight": 11.5,
+                    "actualWeight": "11.5",
+                    "actualReps": "12"
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 13.5,
+                    "actualWeight": "13.5",
+                    "actualReps": "12"
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 13.5,
+                    "actualWeight": "13.5",
+                    "actualReps": "12"
+                  }
+                ]
+              },
+              {
+                "name": "EZ Skull Crusher",
+                "sets": [
+                  {
+                    "reps": 15,
+                    "weight": 20,
+                    "actualWeight": "20",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 20,
+                    "actualWeight": "20",
+                    "actualReps": "12"
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 20,
+                    "actualWeight": "20",
+                    "actualReps": "12"
+                  }
+                ]
+              },
+              {
+                "name": "Lateral Raises",
+                "sets": [
+                  {
+                    "reps": 15,
+                    "weight": 10,
+                    "actualWeight": "10",
+                    "actualReps": "12"
+                  },
+                  {
+                    "reps": 15,
+                    "weight": 11.5,
+                    "actualWeight": "10",
+                    "actualReps": "12"
+                  },
+                  {
+                    "reps": 15,
+                    "weight": 11.5,
+                    "actualWeight": "10",
+                    "actualReps": "12"
+                  }
+                ]
+              },
+              {
+                "name": "Rear Delt Fly",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": 10,
+                    "actualWeight": "10",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 10,
+                    "actualWeight": "10",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 10,
+                    "actualWeight": "10",
+                    "actualReps": "10"
+                  }
+                ]
+              },
+              {
+                "name": "Leg Raises",
+                "sets": [
+                  {
+                    "reps": 30,
+                    "weight": ""
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Pull A",
+            "exercises": [
+              {
+                "name": "Barbell Rows",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": 20
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 30
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 40
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 40
+                  }
+                ]
+              },
+              {
+                "name": "One-Arm DB Row",
+                "sets": [
+                  {
+                    "reps": 10,
+                    "weight": 13.5
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 16
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 18
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 20
+                  }
+                ]
+              },
+              {
+                "name": "Incline DB Curl",
+                "sets": [
+                  {
+                    "reps": 10,
+                    "weight": 11.5
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 13.5
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 13.5
+                  }
+                ]
+              },
+              {
+                "name": "DB Pullovers",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": 13.5
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 16
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 16
+                  }
+                ]
+              },
+              {
+                "name": "Hammer Curl",
+                "sets": [
+                  {
+                    "reps": 10,
+                    "weight": 11.5
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 13.5
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 13.5
+                  }
+                ]
+              },
+              {
+                "name": "Farmers carry",
+                "sets": [
+                  {
+                    "reps": 60,
+                    "weight": ""
+                  },
+                  {
+                    "reps": 60,
+                    "weight": ""
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Legs",
+            "exercises": [
+              {
+                "name": "Deadlift ",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": 20,
+                    "actualReps": "12",
+                    "actualWeight": "20"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 30,
+                    "actualReps": "12",
+                    "actualWeight": "30"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 40,
+                    "actualWeight": "40",
+                    "actualReps": "12"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 40
+                  }
+                ]
+              },
+              {
+                "name": "Goblet Squat",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": 11.5,
+                    "actualWeight": "11.5",
+                    "actualReps": "12"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 13.5,
+                    "actualWeight": "13.5",
+                    "actualReps": "12"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 16,
+                    "actualWeight": "16",
+                    "actualReps": "12"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 16,
+                    "actualWeight": "16",
+                    "actualReps": "12"
+                  }
+                ]
+              },
+              {
+                "name": "Barbell RDL",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": 20,
+                    "actualWeight": "20",
+                    "actualReps": "12"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 30,
+                    "actualWeight": "30",
+                    "actualReps": "12"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 40,
+                    "actualWeight": "40",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 40,
+                    "actualWeight": "40",
+                    "actualReps": "10"
+                  }
+                ]
+              },
+              {
+                "name": "Bulgarian Split Squat",
+                "sets": [
+                  {
+                    "reps": 10,
+                    "weight": 11.5,
+                    "actualWeight": "10",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 11.5,
+                    "actualWeight": "10",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 11.5
+                  }
+                ]
+              },
+              {
+                "name": "Hip Thrust ",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": 13.5,
+                    "actualWeight": "11.5",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 16,
+                    "actualWeight": "13.5",
+                    "actualReps": "12"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 16,
+                    "actualWeight": "13.5",
+                    "actualReps": "12"
+                  }
+                ]
+              },
+              {
+                "name": "Band Hamstring Curl",
+                "sets": [
+                  {
+                    "reps": 15,
+                    "weight": "",
+                    "actualWeight": "40",
+                    "actualReps": "15"
+                  },
+                  {
+                    "reps": 15,
+                    "weight": "",
+                    "actualWeight": "40",
+                    "actualReps": "15"
+                  },
+                  {
+                    "reps": 15,
+                    "weight": "",
+                    "actualWeight": "40",
+                    "actualReps": "15"
+                  }
+                ]
+              },
+              {
+                "name": "Calf Raises",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": 11.5,
+                    "actualWeight": "13.5",
+                    "actualReps": "15"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 13.5,
+                    "actualWeight": "16",
+                    "actualReps": "15"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 16,
+                    "actualWeight": "16",
+                    "actualReps": "15"
+                  }
+                ]
+              },
+              {
+                "name": "Russian Twist ",
+                "sets": [
+                  {
+                    "reps": 30,
+                    "weight": "",
+                    "actualWeight": "5",
+                    "actualReps": "30"
+                  }
+                ]
+              },
+              {
+                "name": "Ab Roller",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": "",
+                    "actualReps": "15"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": ""
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Push B",
+            "exercises": [
+              {
+                "name": "DB Bench Press",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": 16,
+                    "actualReps": "15",
+                    "actualWeight": "16"
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 18,
+                    "actualWeight": "18",
+                    "actualReps": "12"
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 20,
+                    "actualWeight": "20",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 20,
+                    "actualWeight": "20",
+                    "actualReps": "10"
+                  }
+                ]
+              },
+              {
+                "name": "Incline DB Bench Press",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": 13.5,
+                    "actualWeight": "13.5",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 16,
+                    "actualWeight": "16",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 18,
+                    "actualWeight": "18",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 18,
+                    "actualWeight": "18",
+                    "actualReps": "8"
+                  }
+                ]
+              },
+              {
+                "name": "Close Grip Press",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": 13.5,
+                    "actualWeight": "13.5",
+                    "actualReps": "12"
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 16,
+                    "actualWeight": "16",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 16,
+                    "actualWeight": "16",
+                    "actualReps": "10"
+                  }
+                ]
+              },
+              {
+                "name": "Chest Fly",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": 11.5,
+                    "actualWeight": "10",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 11.5,
+                    "actualWeight": "10",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 11.5,
+                    "actualWeight": "10",
+                    "actualReps": "10"
+                  }
+                ],
+                "remarks": ""
+              },
+              {
+                "name": "Lateral Raise",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": 10,
+                    "actualWeight": "10",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 10,
+                    "actualWeight": "10",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 10,
+                    "actualWeight": "10",
+                    "actualReps": "9"
+                  }
+                ]
+              },
+              {
+                "name": "DB Y Raise ",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": 5,
+                    "actualWeight": "5.5",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 6,
+                    "actualWeight": "5.5",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 7,
+                    "actualWeight": "5.5",
+                    "actualReps": "9"
+                  }
+                ]
+              },
+              {
+                "name": "Dead Bug",
+                "sets": [
+                  {
+                    "reps": 30,
+                    "weight": ""
+                  },
+                  {
+                    "reps": 30,
+                    "weight": ""
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Pull B",
+            "exercises": [
+              {
+                "name": "Supinated Barbell Row",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": 20,
+                    "actualWeight": "20",
+                    "actualReps": "15"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 30,
+                    "actualWeight": "30",
+                    "actualReps": "15"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 40,
+                    "actualWeight": "40",
+                    "actualReps": "12"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 40,
+                    "actualWeight": "40",
+                    "actualReps": "12"
+                  }
+                ]
+              },
+              {
+                "name": "Chest Supported DB Row",
+                "sets": [
+                  {
+                    "reps": 10,
+                    "weight": 13.5,
+                    "actualWeight": "13.5",
+                    "actualReps": "12"
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 16,
+                    "actualWeight": "16",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 18,
+                    "actualWeight": "16",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 10,
+                    "weight": 18,
+                    "actualWeight": "16",
+                    "actualReps": "10"
+                  }
+                ]
+              },
+              {
+                "name": "Bench Preacher Curl",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": 10
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 11.5
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 11.5
+                  }
+                ]
+              },
+              {
+                "name": "Rear Delt Fly",
+                "sets": [
+                  {
+                    "reps": 12,
+                    "weight": 10,
+                    "actualWeight": "10",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 10,
+                    "actualWeight": "10",
+                    "actualReps": "10"
+                  },
+                  {
+                    "reps": 12,
+                    "weight": 10,
+                    "actualWeight": "10",
+                    "actualReps": "10"
+                  }
+                ]
+              },
+              {
+                "name": "DB Shrugs",
+                "sets": [
+                  {
+                    "reps": 20,
+                    "weight": 22,
+                    "actualReps": "20",
+                    "actualWeight": "20.5"
+                  },
+                  {
+                    "reps": 20,
+                    "weight": 22,
+                    "actualWeight": "22.5",
+                    "actualReps": "15"
+                  },
+                  {
+                    "reps": 20,
+                    "weight": 22,
+                    "actualWeight": "22.5",
+                    "actualReps": "15"
+                  }
+                ]
+              },
+              {
+                "name": "Wrist Curl",
+                "sets": [
+                  {
+                    "reps": 15,
+                    "weight": 20,
+                    "actualWeight": "20",
+                    "actualReps": "15"
+                  },
+                  {
+                    "reps": 15,
+                    "weight": 25,
+                    "actualWeight": "25",
+                    "actualReps": "15"
+                  },
+                  {
+                    "reps": 15,
+                    "weight": 25,
+                    "actualWeight": "25",
+                    "actualReps": "15"
+                  }
+                ]
+              },
+              {
+                "name": "Anti Rotation Hold",
+                "sets": [
+                  {
+                    "reps": 60,
+                    "weight": "",
+                    "actualReps": "60"
+                  },
+                  {
+                    "reps": 60,
+                    "weight": ""
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "name": "PPL 5 Day Split"
+      }
+    }
+  },
+  "workoutHistory": [
+    {
+      "saveKey": "2026-05-11",
+      "date": "11 May 2026",
+      "week": "0",
+      "day": "Push A",
+      "exercises": [
+        {
+          "name": "DB Bench Press",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "16",
+              "actualReps": "15"
+            },
+            {
+              "actualWeight": "18",
+              "actualReps": "15"
+            },
+            {
+              "actualWeight": "20.5",
+              "actualReps": "12"
+            },
+            {
+              "actualWeight": "20.5",
+              "actualReps": "10"
+            }
+          ]
+        },
+        {
+          "name": "DB Incline Press",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "16",
+              "actualReps": "12"
+            },
+            {
+              "actualWeight": "18",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "18",
+              "actualReps": "10"
+            }
+          ]
+        },
+        {
+          "name": "DB Shoulder Press",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "11.5",
+              "actualReps": "12"
+            },
+            {
+              "actualWeight": "13.5",
+              "actualReps": "12"
+            },
+            {
+              "actualWeight": "13.5",
+              "actualReps": "12"
+            }
+          ]
+        },
+        {
+          "name": "EZ Skull Crusher",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "20",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "20",
+              "actualReps": "12"
+            },
+            {
+              "actualWeight": "20",
+              "actualReps": "12"
+            }
+          ]
+        },
+        {
+          "name": "Lateral Raises",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "10",
+              "actualReps": "12"
+            },
+            {
+              "actualWeight": "10",
+              "actualReps": "12"
+            },
+            {
+              "actualWeight": "10",
+              "actualReps": "12"
+            }
+          ]
+        },
+        {
+          "name": "Rear Delt Fly",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "10",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "10",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "10",
+              "actualReps": "10"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "saveKey": "2026-05-09",
+      "date": "9 May 2026",
+      "week": "0",
+      "day": "Pull B",
+      "exercises": [
+        {
+          "name": "Supinated Barbell Row",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "20",
+              "actualReps": "15"
+            },
+            {
+              "actualWeight": "30",
+              "actualReps": "15"
+            },
+            {
+              "actualWeight": "40",
+              "actualReps": "12"
+            },
+            {
+              "actualWeight": "40",
+              "actualReps": "12"
+            }
+          ]
+        },
+        {
+          "name": "Chest Supported DB Row",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "13.5",
+              "actualReps": "12"
+            },
+            {
+              "actualWeight": "16",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "16",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "16",
+              "actualReps": "10"
+            }
+          ]
+        },
+        {
+          "name": "Rear Delt Fly",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "10",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "10",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "10",
+              "actualReps": "10"
+            }
+          ]
+        },
+        {
+          "name": "DB Shrugs",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "20.5",
+              "actualReps": "20"
+            },
+            {
+              "actualWeight": "22.5",
+              "actualReps": "15"
+            },
+            {
+              "actualWeight": "22.5",
+              "actualReps": "15"
+            }
+          ]
+        },
+        {
+          "name": "Wrist Curl",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "20",
+              "actualReps": "15"
+            },
+            {
+              "actualWeight": "25",
+              "actualReps": "15"
+            },
+            {
+              "actualWeight": "25",
+              "actualReps": "15"
+            }
+          ]
+        },
+        {
+          "name": "Anti Rotation Hold",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "",
+              "actualReps": "60"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "saveKey": "2026-05-08",
+      "date": "8 May 2026",
+      "week": "0",
+      "day": "Push B",
+      "exercises": [
+        {
+          "name": "DB Bench Press",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "16",
+              "actualReps": "15"
+            },
+            {
+              "actualWeight": "18",
+              "actualReps": "12"
+            },
+            {
+              "actualWeight": "20",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "20",
+              "actualReps": "10"
+            }
+          ]
+        },
+        {
+          "name": "Incline DB Bench Press",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "13.5",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "16",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "18",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "18",
+              "actualReps": "8"
+            }
+          ]
+        },
+        {
+          "name": "Close Grip Press",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "13.5",
+              "actualReps": "12"
+            },
+            {
+              "actualWeight": "16",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "16",
+              "actualReps": "10"
+            }
+          ]
+        },
+        {
+          "name": "Chest Fly",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "10",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "10",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "10",
+              "actualReps": "10"
+            }
+          ]
+        },
+        {
+          "name": "Lateral Raise",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "10",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "10",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "10",
+              "actualReps": "9"
+            }
+          ]
+        },
+        {
+          "name": "DB Y Raise ",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "5.5",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "5.5",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "5.5",
+              "actualReps": "9"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "saveKey": "2026-05-06",
+      "date": "6 May 2026",
+      "week": "0",
+      "day": "Legs",
+      "exercises": [
+        {
+          "name": "Deadlift ",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "20",
+              "actualReps": "12"
+            },
+            {
+              "actualWeight": "30",
+              "actualReps": "12"
+            },
+            {
+              "actualWeight": "40",
+              "actualReps": "12"
+            }
+          ]
+        },
+        {
+          "name": "Goblet Squat",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "11.5",
+              "actualReps": "12"
+            },
+            {
+              "actualWeight": "13.5",
+              "actualReps": "12"
+            },
+            {
+              "actualWeight": "16",
+              "actualReps": "12"
+            },
+            {
+              "actualWeight": "16",
+              "actualReps": "12"
+            }
+          ]
+        },
+        {
+          "name": "Barbell RDL",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "20",
+              "actualReps": "12"
+            },
+            {
+              "actualWeight": "30",
+              "actualReps": "12"
+            },
+            {
+              "actualWeight": "40",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "40",
+              "actualReps": "10"
+            }
+          ]
+        },
+        {
+          "name": "Bulgarian Split Squat",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "10",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "10",
+              "actualReps": "10"
+            }
+          ]
+        },
+        {
+          "name": "Hip Thrust ",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "11.5",
+              "actualReps": "10"
+            },
+            {
+              "actualWeight": "13.5",
+              "actualReps": "12"
+            },
+            {
+              "actualWeight": "13.5",
+              "actualReps": "12"
+            }
+          ]
+        },
+        {
+          "name": "Band Hamstring Curl",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "40",
+              "actualReps": "15"
+            },
+            {
+              "actualWeight": "40",
+              "actualReps": "15"
+            },
+            {
+              "actualWeight": "40",
+              "actualReps": "15"
+            }
+          ]
+        },
+        {
+          "name": "Calf Raises",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "13.5",
+              "actualReps": "15"
+            },
+            {
+              "actualWeight": "16",
+              "actualReps": "15"
+            },
+            {
+              "actualWeight": "16",
+              "actualReps": "15"
+            }
+          ]
+        },
+        {
+          "name": "Russian Twist ",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "5",
+              "actualReps": "30"
+            }
+          ]
+        },
+        {
+          "name": "Ab Roller",
+          "remarks": "",
+          "sets": [
+            {
+              "actualWeight": "",
+              "actualReps": "15"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "saveKey": "2026-05-05",
+      "date": "5 May 2026",
+      "week": "0",
+      "day": "Push A",
+      "exercises": []
+    }
+  ],
+  "activeWorkoutState": {
+    "workoutMode": false,
+    "activeWorkoutScreen": null,
+    "activeExerciseIndex": 6,
+    "activeSetIndex": 0,
+    "workoutStartTime": null,
+    "workoutSeconds": 16092,
+    "restSeconds": 50,
+    "restPaused": false,
+    "skippedSets": 0,
+    "activeScreen": "app",
+    "activeTab": "settings",
+    "finalWorkoutSeconds": 16093
+  },
+  "selectedRoutine": "0",
+  "selectedDay": 1,
+  "exportDate": "2026-05-11T06:38:16.342Z",
+  "version": 1
+}

@@ -22,6 +22,18 @@ import HistoryPage from "./pages/HistoryPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import ExerciseRepoPage from "./pages/ExerciseRepoPage";
 import { workoutData } from "./workoutData.js";
+import { buildBestAvailableProgram } from "./programRecovery.js";
+import { attachLatestStorageImages } from "./storageImageRecovery.js";
+import {
+  appendCloudSnapshot,
+  countProgramExercises,
+  ensureCloudWriteFrozenByDefault,
+  evaluateCloudWriteSafety,
+  isCloudWriteFrozen,
+  mergeWorkoutHistories,
+  rememberGoodCloudMeta,
+  saveLocalRollingBackup,
+} from "./cloudSafety.js";
 import {
   createStretchEntry,
   formatDurationSeconds,
@@ -80,6 +92,98 @@ const defaultProgram = {
     }
   }
 };
+
+function normalizeToRoutinesProgram(program) {
+  if (!program || typeof program !== "object") return null;
+  if (program.routines) return program;
+  if (program.weeks) {
+    const routines = {};
+    Object.keys(program.weeks)
+      .sort((a, b) => Number(a) - Number(b))
+      .forEach((key, index) => {
+        routines[String(index)] = program.weeks[key];
+      });
+    return { ...program, routines };
+  }
+  return null;
+}
+
+function pickRichestProgram(...candidates) {
+  let best = null;
+  let bestCount = -1;
+  for (const candidate of candidates) {
+    const normalized = normalizeToRoutinesProgram(candidate);
+    if (!normalized?.routines) continue;
+    const count = countProgramExercises(normalized);
+    if (count > bestCount) {
+      best = normalized;
+      bestCount = count;
+    }
+  }
+  return best || defaultProgram;
+}
+
+function isSeedLikeProgram(program) {
+  const routines = Object.values(
+    normalizeToRoutinesProgram(program)?.routines || {}
+  );
+  if (!routines.length) return true;
+  if (countProgramExercises(program) === 0) return true;
+  return routines.every((routine) =>
+    /^week\s*\d+$/i.test(String(routine?.name || "").trim())
+  );
+}
+
+function isRecoveredFragmentProgram(program) {
+  const names = Object.values(program?.routines || {}).map((routine) =>
+    String(routine?.name || "").trim().toLowerCase()
+  );
+  if (!names.length) return true;
+  // Earlier auto-recovery left many partial/historical leftovers.
+  if (names.some((name) => name === "routine 6" || name === "football" || name === "hiit")) {
+    return true;
+  }
+  if (names.length !== new Set(names).size) return true;
+  return false;
+}
+
+function chooseProgramToLoad({ cloud, local, seed, history }) {
+  const cloudProgram = normalizeToRoutinesProgram(cloud);
+  const localProgram = normalizeToRoutinesProgram(local);
+  const seedProgram = normalizeToRoutinesProgram(seed);
+  const bestAvailable = buildBestAvailableProgram(history);
+
+  const cloudCount = countProgramExercises(cloudProgram);
+  const localCount = countProgramExercises(localProgram);
+  const bestCount = countProgramExercises(bestAvailable);
+
+  // Prefer a clean cloud program the user actually curated.
+  if (
+    cloudCount > 0 &&
+    !isSeedLikeProgram(cloudProgram) &&
+    !isRecoveredFragmentProgram(cloudProgram)
+  ) {
+    return cloudProgram;
+  }
+
+  // Otherwise rebuild from complete backups + latest history.
+  if (bestCount > 0) return bestAvailable;
+
+  if (
+    localCount > 0 &&
+    !isSeedLikeProgram(localProgram) &&
+    !isRecoveredFragmentProgram(localProgram)
+  ) {
+    return localProgram;
+  }
+
+  return pickRichestProgram(
+    cloudProgram,
+    localProgram,
+    seedProgram,
+    defaultProgram
+  );
+}
 
 const [data, setData] = useState(defaultProgram);
 const [isDataLoaded, setIsDataLoaded] = useState(false);
@@ -242,8 +346,33 @@ useEffect(() => {
 ]);
 
   useEffect(() => {
+    // Never persist the empty bootstrapping default before load finishes.
+    if (!isDataLoaded) return;
     localStorage.setItem("workout-app-data", JSON.stringify(data));
-  }, [data]);
+  }, [data, isDataLoaded]);
+
+  // Throttled local rolling backups while rebuilding (works even if cloud frozen).
+  useEffect(() => {
+    if (!isDataLoaded) return;
+    if (countProgramExercises(data) <= 0) return;
+    if (!Array.isArray(workoutHistory)) return;
+
+    const timeout = setTimeout(() => {
+      saveLocalRollingBackup(
+        {
+          workoutPlans: data,
+          workoutHistory,
+          selectedRoutine,
+          selectedDay,
+          exportDate: new Date().toISOString(),
+          version: 1,
+        },
+        "local-edit"
+      );
+    }, 8000);
+
+    return () => clearTimeout(timeout);
+  }, [data, isDataLoaded, workoutHistory, selectedRoutine, selectedDay]);
 
   useEffect(() => {
   console.log("DATA CHANGED", data);
@@ -253,6 +382,7 @@ useEffect(() => {
 async function loadData() {
   try {
     console.log("LOAD STARTED");
+    ensureCloudWriteFrozenByDefault();
 
     const { data: row, error } = await supabase
       .from("workout_data")
@@ -275,26 +405,61 @@ const cloudSelectedRoutine = supabaseData?.selectedRoutine;
 const cloudSelectedDay = supabaseData?.selectedDay;
 const cloudWorkoutState = supabaseData?.activeWorkoutState;
 
-const hasSupabaseData =
-  !!cloudWorkoutPlans?.routines &&
-  Object.keys(cloudWorkoutPlans.routines || {}).length > 0;
+const localHistory = (() => {
+  try {
+    const raw = localStorage.getItem("workout-history");
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+})();
+const historyForRecovery = mergeWorkoutHistories(
+  cloudWorkoutHistory,
+  localHistory
+);
 
-const hasLocalData =
-  localData &&
-  localData.routines &&
-  Object.keys(localData.routines).length > 0;
+let chosenProgram = chooseProgramToLoad({
+  cloud: cloudWorkoutPlans,
+  local: localData,
+  seed: workoutData,
+  history: historyForRecovery,
+});
 
-// choose richer dataset
-console.log("SETTING DATA FROM: SUPABASE DIRECT");
-
-setData(cloudWorkoutPlans || defaultProgram);
-
-if (
-  cloudWorkoutHistory &&
-  cloudWorkoutHistory.length > 0
-) {
-  setWorkoutHistory(cloudWorkoutHistory);
+// Re-attach yesterday's uploaded Storage images (files survived the wipe).
+try {
+  chosenProgram = await attachLatestStorageImages(chosenProgram);
+} catch (err) {
+  console.warn("Image reattach failed", err);
 }
+
+console.log(
+  "SETTING DATA FROM RECOVERY/LOAD",
+  countProgramExercises(chosenProgram),
+  "exercises",
+  Object.values(chosenProgram?.routines || {}).map((r) => r?.name)
+);
+
+setData(chosenProgram);
+
+// Never drop phone or cloud history sessions — merge both.
+const resolvedHistory = mergeWorkoutHistories(
+  cloudWorkoutHistory,
+  localHistory
+);
+
+if (resolvedHistory.length > 0) {
+  setWorkoutHistory(resolvedHistory);
+}
+
+// Ratchet last-known-good from whatever rich source we still have.
+rememberGoodCloudMeta({
+  exerciseCount: Math.max(
+    countProgramExercises(cloudWorkoutPlans),
+    countProgramExercises(localData),
+    countProgramExercises(chosenProgram)
+  ),
+  historyLength: resolvedHistory.length,
+});
 
 if (cloudSelectedRoutine !== undefined) {
   setSelectedRoutine(cloudSelectedRoutine);
@@ -349,9 +514,22 @@ if (cloudWorkoutState?.isPaused === true) {
     console.error("Supabase load failed", err);
 
     const stored = localStorage.getItem("workout-app-data");
-    if (stored) {
-      setData(JSON.parse(stored));
+    const localData = stored ? JSON.parse(stored) : null;
+    let localHistory = [];
+    try {
+      const raw = localStorage.getItem("workout-history");
+      localHistory = raw ? JSON.parse(raw) : [];
+    } catch {
+      localHistory = [];
     }
+    setData(
+      chooseProgramToLoad({
+        cloud: null,
+        local: localData,
+        seed: workoutData,
+        history: localHistory,
+      })
+    );
   } finally {
     // ✅ ALWAYS runs
     console.log("LOAD COMPLETE");
@@ -367,57 +545,86 @@ if (cloudWorkoutState?.isPaused === true) {
     if (!hasLoadedCloudData) return;
     const timeout = setTimeout(async () => {
       console.log("🔥 SAVE TRIGGERED", data);
+
+if (isCloudWriteFrozen()) {
+  console.warn(
+    "🧊 Cloud write frozen — skipping Supabase overwrite during recovery"
+  );
+  return;
+}
+
 const hasValidRoutines =
   data?.routines &&
   Object.keys(data.routines).length > 0;
 
-const hasValidHistory =
-  Array.isArray(workoutHistory);
+const hasValidHistory = Array.isArray(workoutHistory);
 
 if (!hasValidRoutines || !hasValidHistory) {
   console.warn("⛔ Skipping save — invalid data");
   return;
 }
-try {
-  await supabase
-    .from("workout_data")
-    .update({
-  data: {
-    workoutPlans: data,
 
-    workoutHistory,
+const safety = evaluateCloudWriteSafety({
+  program: data,
+  history: workoutHistory,
+});
+if (!safety.ok) {
+  console.warn("⛔ Skipping save —", safety.message);
+  return;
+}
 
-    activeWorkoutState: {
-      workoutMode,
-      activeWorkoutScreen,
-      activeExerciseIndex,
-      activeSetIndex,
-      workoutStartTime,
-      workoutSeconds,
-      restSeconds,
-      restPaused,
-      skippedSets,
-      activeScreen,
-      activeTab,
-      finalWorkoutSeconds,
-      isPaused: isPausedWorkout,
-      pausedAt: isPausedWorkout ? Date.now() : null,
-      amrapCircuitsCompleted,
-      amrapSecondsRemaining,
-      amrapPartialEntries,
-    },
-
-    selectedRoutine,
-    selectedDay,
-
-    exportDate: new Date().toISOString(),
-    version: 1,
+const payload = {
+  workoutPlans: data,
+  workoutHistory,
+  activeWorkoutState: {
+    workoutMode,
+    activeWorkoutScreen,
+    activeExerciseIndex,
+    activeSetIndex,
+    workoutStartTime,
+    workoutSeconds,
+    restSeconds,
+    restPaused,
+    skippedSets,
+    activeScreen,
+    activeTab,
+    finalWorkoutSeconds,
+    isPaused: isPausedWorkout,
+    pausedAt: isPausedWorkout ? Date.now() : null,
+    amrapCircuitsCompleted,
+    amrapSecondsRemaining,
+    amrapPartialEntries,
   },
-})
+  selectedRoutine,
+  selectedDay,
+  exportDate: new Date().toISOString(),
+  version: 1,
+};
+
+try {
+  saveLocalRollingBackup(payload, "autosave");
+
+  const { error } = await supabase
+    .from("workout_data")
+    .update({ data: payload })
     .eq("user_id", "default-user");
-    } catch (err) {
-      console.error("Supabase save failed", err);
-    }
+
+  if (error) throw error;
+
+  rememberGoodCloudMeta({
+    exerciseCount: safety.exerciseCount,
+    historyLength: safety.historyLength,
+  });
+
+  await appendCloudSnapshot(supabase, {
+    payload,
+    exerciseCount: safety.exerciseCount,
+    historyLength: safety.historyLength,
+    source: "autosave",
+  });
+} catch (err) {
+  console.error("Supabase save failed", err);
+}
   }, 500);
 
   return () => clearTimeout(timeout);
@@ -1080,6 +1287,13 @@ async function persistWorkoutCloudPayload({
     exportDate: new Date().toISOString(),
     version: 1,
   };
+
+  if (isCloudWriteFrozen()) {
+    console.warn(
+      "🧊 Cloud write frozen — workout saved locally only (Supabase not updated)"
+    );
+    return payload;
+  }
 
   const { error } = await supabase
     .from("workout_data")
